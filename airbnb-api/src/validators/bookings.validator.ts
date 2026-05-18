@@ -1,7 +1,6 @@
 import { z } from "zod/v4";
 
 export const createBookingSchema = z.object({
-  userId: z.string().uuid("User ID must be a valid UUID"),
   listingId: z.string().uuid("Listing ID must be a valid UUID"),
   checkIn: z.string().datetime("Invalid checkIn date"),
   checkOut: z.string().datetime("Invalid checkOut date"),

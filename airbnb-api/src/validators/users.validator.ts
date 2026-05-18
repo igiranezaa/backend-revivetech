@@ -6,6 +6,7 @@ export const createUserSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
   phone: z.string().min(7, "Invalid phone number"),
   role: z.enum(["ADMIN", "HOST", "GUEST"]).default("GUEST"),
+  isSuperAdmin: z.boolean().optional(),
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
 

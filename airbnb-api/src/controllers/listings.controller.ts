@@ -63,7 +63,9 @@ export const searchListings = async (
     }
 
     // Build where clause with conditional filters
-    const whereClause: Record<string, unknown> = {};
+    const whereClause: Record<string, unknown> = {
+      status: "ACTIVE",
+    };
 
     if (location) {
       whereClause.location = { contains: location, mode: "insensitive" };
@@ -153,7 +155,9 @@ export const getAllListings = async (req: Request, res: Response, next: NextFunc
      return;
     }
 
-    const whereClause: Record<string, unknown> = {};
+    const whereClause: Record<string, unknown> = {
+      status: "ACTIVE",
+    };
      if (location) {
       whereClause.location = { contains: location, mode: "insensitive" };
      }
@@ -171,6 +175,9 @@ export const getAllListings = async (req: Request, res: Response, next: NextFunc
       return;
     }
 
+    const orderByObj: Record<string, "asc" | "desc"> = {};
+    orderByObj[sortByRaw] = orderRaw as "asc" | "desc";
+
     const [listings, total] = await Promise.all([
       prisma.listing.findMany({
         where: whereClause,
@@ -187,6 +194,10 @@ export const getAllListings = async (req: Request, res: Response, next: NextFunc
           createdAt: true,
           updatedAt: true,
           hostId: true,
+          photos: {
+            select: { id: true, url: true },
+            take: 5,
+          },
           host: {
             select: {
               name: true,
@@ -194,10 +205,10 @@ export const getAllListings = async (req: Request, res: Response, next: NextFunc
             },
           },
           _count: {
-            select: { bookings: true },
+            select: { bookings: true, reviews: true },
           },
         },
-        orderBy: { [sortByRaw]: orderRaw },
+        orderBy: orderByObj as any,
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -235,6 +246,12 @@ export const getListingById = async (req: Request, res: Response, next: NextFunc
               },
             },
           },
+          reviews: {
+            include: {
+              user: { select: { id: true, name: true, avatar: true } },
+            },
+            orderBy: { createdAt: "desc" },
+          },
         },
       });
 
@@ -267,6 +284,7 @@ export const createListing = async (req: AuthRequest, res: Response, next: NextF
       pricePerNight,
       guests,
       type: type as ListingType,
+      status: req.role === "GUEST" ? "PENDING" : "ACTIVE",
       amenities,
       rating: typeof rating === "number" ? rating : null,
       hostId: req.userId,
@@ -325,33 +343,106 @@ export const updateListing = async (req: AuthRequest, res: Response, next: NextF
 };
 
 export const deleteListing = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
-  try{
+  try {
     const id = parseId(req.params.id);
 
+    const listing = await prisma.listing.findUnique({ where: { id } });
+    if (!listing) {
+      res.status(404).json({ message: "Listing not found" });
+      return;
+    }
 
-  const current = await prisma.listing.findFirst({ where: { id } });
-  if (!current) {
-    res.status(404).json({ message: "Listing not found" });
-    return;
-  }
+    if (!req.userId) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
 
-  if (!req.userId) {
-    res.status(401).json({ message: "Missing or invalid token" });
-    return;
-  }
-  if (current.hostId !== req.userId && req.role !== "ADMIN") {
-    res.status(403).json({ message: "You can only delete your own listings" });
-    return;
-  }
+    // Only the host or an admin can expire a listing
+    if (listing.hostId !== req.userId && req.role !== "ADMIN") {
+      res.status(403).json({ message: "You can only remove your own listings" });
+      return;
+    }
 
-  await prisma.listing.delete({ where: { id } });
+    // Soft delete: set status to EXPIRED instead of deleting from DB
+    const updated = await prisma.listing.update({
+      where: { id },
+      data: { status: "EXPIRED" },
+    });
 
-  // Invalidate stats and listings cache
-  deleteCacheByPattern("stats:");
-  deleteCacheByPattern("listings:");
-
-  res.status(204).send();
-  }catch(error){
+    res.json({ message: "Listing marked as expired", listing: updated });
+  } catch (error) {
     next(error);
   }
 };
+
+export const getAdminListings = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const statusRaw = req.query.status?.toString().toUpperCase();
+    const pageRaw = req.query.page?.toString() ?? "1";
+    const limitRaw = req.query.limit?.toString() ?? "10";
+
+    const page = Number.parseInt(pageRaw, 10);
+    const limit = Number.parseInt(limitRaw, 10);
+
+    if (
+      !Number.isInteger(page) ||
+      page <= 0 ||
+      !Number.isInteger(limit) ||
+      limit <= 0
+    ) {
+      res.status(400).json({ message: "page and limit must be positive integers" });
+      return;
+    }
+
+    const whereClause: Record<string, unknown> = {};
+    if (statusRaw && ["ACTIVE", "PENDING", "EXPIRED"].includes(statusRaw)) {
+      whereClause.status = statusRaw;
+    }
+
+    const [listings, total] = await Promise.all([
+      prisma.listing.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          title: true,
+          location: true,
+          pricePerNight: true,
+          rating: true,
+          createdAt: true,
+          hostId: true,
+          status: true,
+          guests: true,
+          type: true,
+          amenities: true,
+          description: true,
+          photos: {
+            select: { id: true, url: true },
+            take: 1,
+          },
+          host: {
+            select: {
+              name: true,
+            },
+          },
+          _count: {
+            select: { bookings: true, reviews: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.listing.count({ where: whereClause }),
+    ]);
+
+    const totalPages = Math.ceil(total / limit);
+
+    res.json({
+      data: listings,
+      meta: { total, page, limit, totalPages },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

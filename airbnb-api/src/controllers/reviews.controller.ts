@@ -18,8 +18,17 @@ export const createReview = async (
   try {
     const listingId = parseId(req.params.id);
 
+    if (!req.userId) {
+      res.status(401).json({ message: "Missing or invalid token" });
+      return;
+    }
+    if (req.role !== "GUEST") {
+      res.status(403).json({ message: "Only guests can review listings" });
+      return;
+    }
+
     const parsed = createReviewSchema.parse(req.body);
-    const { userId, rating, comment } = parsed;
+    const { rating, comment } = parsed;
 
     // Validate rating
     if (rating < 1 || rating > 5) {
@@ -33,10 +42,27 @@ export const createReview = async (
       res.status(404).json({ message: "Listing not found" });
       return;
     }
+    if (listing.hostId === req.userId) {
+      res.status(403).json({ message: "Hosts cannot review their own listings" });
+      return;
+    }
+
+    const booking = await prisma.booking.findFirst({
+      where: {
+        listingId,
+        guestId: req.userId,
+        status: "CONFIRMED",
+      },
+    });
+
+    if (!booking) {
+      res.status(403).json({ message: "You can only review listings you have booked" });
+      return;
+    }
 
     const review = await prisma.review.create({
       data: {
-        userId,
+        userId: req.userId,
         listingId,
         rating,
         comment,
@@ -54,6 +80,86 @@ export const createReview = async (
     deleteCacheByPattern("stats:listings");
 
     res.status(201).json(review);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getAllReviews = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const reviews = await prisma.review.findMany({
+      include: {
+        user: { select: { id: true, name: true, avatar: true, email: true } },
+        listing: { select: { id: true, title: true, location: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    res.json({ data: reviews });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createSystemReview = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    if (!req.userId) {
+      res.status(401).json({ message: "Missing or invalid token" });
+      return;
+    }
+    const parsed = createReviewSchema.omit({ userId: true }).parse(req.body);
+    const review = await prisma.systemReview.create({
+      data: { userId: req.userId, rating: parsed.rating, comment: parsed.comment },
+      include: { user: { select: { id: true, name: true, avatar: true } } },
+    });
+    res.status(201).json(review);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getSystemReviews = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const reviews = await prisma.systemReview.findMany({
+      include: { user: { select: { id: true, name: true, avatar: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+    res.json({ data: reviews });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createTestimonial = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    if (!req.userId) {
+      res.status(401).json({ message: "Missing or invalid token" });
+      return;
+    }
+    const quote = typeof req.body.quote === "string" ? req.body.quote.trim() : "";
+    if (quote.length < 5 || quote.length > 500) {
+      res.status(400).json({ message: "Testimonial must be between 5 and 500 characters" });
+      return;
+    }
+    const testimonial = await prisma.testimonial.create({
+      data: { userId: req.userId, quote },
+      include: { user: { select: { id: true, name: true, avatar: true } } },
+    });
+    res.status(201).json(testimonial);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getTestimonials = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const testimonials = await prisma.testimonial.findMany({
+      include: { user: { select: { id: true, name: true, avatar: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+    res.json({ data: testimonials });
   } catch (error) {
     next(error);
   }

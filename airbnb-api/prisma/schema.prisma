@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,10 +6,150 @@ datasource db {
   provider = "postgresql"
 }
 
+model User {
+  id               String         @id @default(uuid())
+  name             String
+  email            String         @unique
+  username         String         @unique
+  phone            String
+  role             Role           @default(GUEST)
+  avatar           String?
+  bio              String?
+  createdAt        DateTime       @default(now())
+  password         String
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  updatedAt        DateTime       @updatedAt
+  avatarPublicId   String?
+  roles            Role[]         @default([GUEST])
+  isSuperAdmin     Boolean        @default(false)
+  bookings         Booking[]
+  listings         Listing[]
+  receivedMessages Message[]      @relation("ReceivedMessages")
+  sentMessages     Message[]      @relation("SentMessages")
+  reviews          Review[]
+  systemReviews    SystemReview[]
+  testimonials     Testimonial[]
+
+  @@index([name])
+  @@index([role])
+}
+
+model SystemReview {
+  id        String   @id @default(uuid())
+  rating    Int
+  comment   String
+  userId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Testimonial {
+  id        String   @id @default(uuid())
+  quote     String
+  userId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Listing {
+  id            String         @id @default(uuid())
+  title         String
+  description   String
+  location      String
+  pricePerNight Float
+  guests        Int
+  type          ListingType
+  status        ListingStatus  @default(ACTIVE)
+  amenities     String[]
+  rating        Float?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  hostId        String
+  address       String?
+  bathrooms     Int?
+  bedrooms      Int?
+  beds          Int?
+  placeType     String?
+  spaceType     String?
+  bookings      Booking[]
+  host          User           @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  photos        ListingPhoto[]
+  reviews       Review[]
+
+  @@index([hostId])
+  @@index([location])
+  @@index([type])
+  @@index([pricePerNight])
+  @@index([status])
+}
+
+model ListingPhoto {
+  id        String  @id @default(uuid())
+  url       String
+  publicId  String
+  listingId String
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+}
+
+model Booking {
+  id         String        @id @default(uuid())
+  checkIn    DateTime
+  checkOut   DateTime
+  totalPrice Float
+  status     BookingStatus @default(PENDING)
+  createdAt  DateTime      @default(now())
+  guestId    String
+  listingId  String
+  guests     Int
+  guest      User          @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  listing    Listing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  messages   Message[]
+
+  @@index([guestId])
+  @@index([listingId])
+  @@index([status])
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  rating    Int
+  comment   String
+  userId    String
+  listingId String
+  createdAt DateTime @default(now())
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([listingId])
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  content    String
+  senderId   String
+  receiverId String
+  bookingId  String?
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  booking    Booking? @relation(fields: [bookingId], references: [id])
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([bookingId])
+}
+
 enum Role {
-  ADMIN
   HOST
-  GUEST 
+  GUEST
+  ADMIN
 }
 
 enum ListingType {
@@ -30,89 +165,8 @@ enum BookingStatus {
   CANCELLED
 }
 
-model User {
-  id        String    @id @default(uuid())
-  name      String
-  email     String    @unique
-  username  String    @unique
-  password  String
-  phone     String
-  role      Role      @default(GUEST)
-  avatar    String?
-  avatarPublicId String?
-  bio       String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  resetToken String?
-  resetTokenExpiry DateTime?
-  listings  Listing[]
-  bookings  Booking[]
-  reviews   Review[]
-
-  @@index([name])
-  @@index([role])
-}
-
-model Listing {
-  id            String      @id @default(uuid())
-  title         String
-  description   String
-  location      String
-  pricePerNight Float
-  guests        Int
-  type          ListingType
-  amenities     String[]
-  rating        Float?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  hostId        String
-  host          User        @relation(fields: [hostId], references: [id], onDelete: Cascade)
-  bookings      Booking[]
-  reviews       Review[]
-  photos        ListingPhoto[]
-
-  @@index([hostId])
-  @@index([location])
-  @@index([type])
-  @@index([pricePerNight])
-}
-
-model ListingPhoto {
-  id        String  @id @default(uuid())
-  url       String
-  publicId  String
-  listingId String
-  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
-}
-
-model Booking {
-  id         String        @id @default(uuid())
-  checkIn    DateTime
-  checkOut   DateTime
-  guests     Int
-  totalPrice Float
-  status     BookingStatus @default(PENDING)
-  createdAt  DateTime      @default(now())
-  guestId    String
-  listingId  String
-  guest      User          @relation(fields: [guestId], references: [id], onDelete: Cascade)
-  listing    Listing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
-
-  @@index([guestId])
-  @@index([listingId])
-  @@index([status])
-}
-
-model Review {
-  id        String   @id @default(uuid())
-  rating    Int
-  comment   String
-  userId    String
-  listingId String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-
-  @@index([userId])
-  @@index([listingId])
+enum ListingStatus {
+  ACTIVE
+  PENDING
+  EXPIRED
 }

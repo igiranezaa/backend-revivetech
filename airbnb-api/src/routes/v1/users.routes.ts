@@ -4,11 +4,12 @@ import {
   getUserById,
   updateUser,
   deleteUser,
+  createUser,
   getUserListings,
   getUserBookings,
 } from "../../controllers/users.controller.js";
 import { getUsersStats } from "../../controllers/stats.controller.js";
-import { authenticate } from "../../middlewares/auth.middleware.js";
+import { authenticate, requireAdmin } from "../../middlewares/auth.middleware.js";
 
 const router = Router();
 
@@ -68,7 +69,8 @@ const router = Router();
  *       401:
  *         $ref: '#/components/schemas/ErrorResponse'
  */
-router.get("/", authenticate, getAllUsers);
+router.get("/", authenticate, requireAdmin, getAllUsers);
+router.post("/", authenticate, requireAdmin, createUser);
 
 /**
  * @swagger
@@ -229,6 +231,6 @@ router.put("/:id", authenticate, updateUser);
  *       404:
  *         $ref: '#/components/schemas/ErrorResponse'
  */
-router.delete("/:id", authenticate, deleteUser);
+router.delete("/:id", authenticate, requireAdmin, deleteUser);
 
 export default router;

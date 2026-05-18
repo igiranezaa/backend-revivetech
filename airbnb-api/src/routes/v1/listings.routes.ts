@@ -6,9 +6,10 @@ import {
   createListing,
   updateListing,
   deleteListing,
+  getAdminListings,
 } from "../../controllers/listings.controller.js";
 import { getListingsStats } from "../../controllers/stats.controller.js";
-import { authenticate, requireHost } from "../../middlewares/auth.middleware.js";
+import { authenticate, requireHost, requireAdmin } from "../../middlewares/auth.middleware.js";
 
 const router = Router();
 
@@ -262,6 +263,31 @@ router.get("/stats", getListingsStats);
  *       404:
  *         $ref: '#/components/schemas/ErrorResponse'
  */
+router.get("/admin", authenticate, requireAdmin, getAdminListings);
+
+/**
+ * @swagger
+ * /listings/{id}:
+ *   get:
+ *     summary: Get listing by ID
+ *     tags: [Listings]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Listing details with host and reviews
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Listing'
+ *       404:
+ *         $ref: '#/components/schemas/ErrorResponse'
+ */
 router.get("/:id", getListingById);
 
 /**
@@ -290,7 +316,7 @@ router.get("/:id", getListingById);
  *       401:
  *         $ref: '#/components/schemas/ErrorResponse'
  */
-router.post("/", authenticate, requireHost, createListing);
+router.post("/", authenticate, createListing);
 
 /**
  * @swagger

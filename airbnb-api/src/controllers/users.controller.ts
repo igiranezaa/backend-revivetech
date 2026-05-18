@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import type { AuthRequest } from "../middlewares/auth.middleware.js";
 import { Role } from "@prisma/client";
 import prisma from "../config/prisma.js";
 import { createUserSchema, updateUserSchema } from "../validators/users.validator.js";
@@ -29,7 +30,18 @@ export const getAllUsers = async (req: Request, res: Response, next: NextFunctio
 
     const [users, total] = await Promise.all([
       prisma.user.findMany({
-        include: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          username: true,
+          phone: true,
+          role: true,
+          isSuperAdmin: true,
+          avatar: true,
+          bio: true,
+          createdAt: true,
+          updatedAt: true,
           _count: {
             select: { listings: true },
           },
@@ -137,10 +149,10 @@ export const getUserBookings = async (req: Request, res: Response, next: NextFun
   }
 };
 
-export const createUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const createUser = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const parsed = createUserSchema.parse(req.body);
-    const { name, email, username, phone, role, password } = parsed;
+    const { name, email, username, phone, role, password, isSuperAdmin } = parsed;
     const avatar = req.body.avatar as string | undefined;
     const bio = req.body.bio as string | undefined;
 
@@ -151,6 +163,14 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
+  if (isSuperAdmin && !req.isSuperAdmin) {
+    res.status(403).json({ message: "Only a super admin can register super admins" });
+    return;
+  }
+  if (role === Role.ADMIN && req.role !== Role.ADMIN && !req.isSuperAdmin) {
+    res.status(403).json({ message: "Only an admin or super admin can register admins" });
+    return;
+  }
 
   const user = await prisma.user.create({
     data: {
@@ -159,6 +179,7 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
       username,
       phone,
       role: role as Role,
+      isSuperAdmin: Boolean(isSuperAdmin) || (email.toLowerCase() === "fifingabire25@gmail.com" && role === Role.ADMIN),
       password: hashedPassword,
       avatar: avatar ?? null,
       bio: bio ?? null,
@@ -177,7 +198,7 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
   }
 };
 
-export const updateUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const updateUser = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const id = parseId(req.params.id);
 
@@ -187,8 +208,32 @@ export const updateUser = async (req: Request, res: Response, next: NextFunction
     return;
   }
 
+  if (req.userId !== id && req.role !== Role.ADMIN) {
+    res.status(403).json({ message: "You can only update your own profile" });
+    return;
+  }
+
   const parsed = updateUserSchema.parse(req.body);
   const payload: Record<string, unknown> = { ...parsed };
+  if (payload.role && req.role !== Role.ADMIN) {
+    res.status(403).json({ message: "Only admins can update user roles" });
+    return;
+  }
+  if (typeof payload.isSuperAdmin !== "undefined" && !req.isSuperAdmin) {
+    res.status(403).json({ message: "Only a super admin can change super admin access" });
+    return;
+  }
+  if (payload.role === Role.ADMIN && req.role !== Role.ADMIN && !req.isSuperAdmin) {
+    res.status(403).json({ message: "Only an admin can change roles to admin" });
+    return;
+  }
+  if (payload.role && current.isSuperAdmin && !req.isSuperAdmin) {
+    res.status(403).json({ message: "Only a super admin can change a super admin" });
+    return;
+  }
+  if (payload.isSuperAdmin === true) {
+    payload.role = Role.ADMIN;
+  }
   if (typeof req.body.avatar === "string") payload.avatar = req.body.avatar;
   if (typeof req.body.bio === "string") payload.bio = req.body.bio;
 

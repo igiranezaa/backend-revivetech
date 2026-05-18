@@ -3,7 +3,13 @@ import {
   createReview,
   getListingReviews,
   deleteReview,
+  getAllReviews,
+  createSystemReview,
+  getSystemReviews,
+  createTestimonial,
+  getTestimonials,
 } from "../../controllers/reviews.controller.js";
+import { authenticate, requireAdmin } from "../../middlewares/auth.middleware.js";
 
 const router = Router();
 
@@ -156,10 +162,20 @@ const router = Router();
  *         $ref: '#/components/schemas/ErrorResponse'
  */
 
+router.get("/", authenticate, requireAdmin, getAllReviews);
+
 router.get("/listings/:id/reviews", getListingReviews);
 
-router.post("/listings/:id/reviews", createReview);
+router.post("/listings/:id/reviews", authenticate, createReview);
 
-router.delete("/reviews/:id", deleteReview);
+router.get("/system", getSystemReviews);
+
+router.post("/system", authenticate, createSystemReview);
+
+router.get("/testimonials", getTestimonials);
+
+router.post("/testimonials", authenticate, createTestimonial);
+
+router.delete("/:id", authenticate, requireAdmin, deleteReview);
 
 export default router;

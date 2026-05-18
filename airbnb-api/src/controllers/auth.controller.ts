@@ -23,6 +23,17 @@ const withoutSensitiveFields = <T extends { password?: string | null; resetToken
   return rest;
 };
 
+const adminNotificationRecipients = (): string[] => {
+  const configured = process.env["ADMIN_NOTIFICATION_EMAILS"] || process.env["ADMIN_EMAIL"] || "fifingabire25@gmail.com";
+  return configured.split(",").map((email) => email.trim()).filter(Boolean);
+};
+
+const notifyAdmins = (subject: string, html: string): void => {
+  adminNotificationRecipients().forEach((email) => {
+    sendEmail(email, subject, html).catch((err) => console.error(`Failed to send admin email to ${email}:`, err));
+  });
+};
+
 export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const parsed = registerSchema.parse(req.body);
@@ -39,17 +50,29 @@ export const register = async (req: Request, res: Response, next: NextFunction):
     if (existing) {
       if (existing.email === email) {
         res.status(409).json({ message: "Email already in use" });
+        return;
       } else {
         // Username collision — regenerate
         const newUsername = `${baseUsername}${Math.floor(1000 + Math.random() * 9000)}`;
         const hashedPassword = await bcrypt.hash(password, 10);
         const user = await prisma.user.create({
-          data: { name, email, username: newUsername, phone, password: hashedPassword, role: Role.GUEST, avatar: null, bio: null },
+          data: {
+            name,
+            email,
+            username: newUsername,
+            phone,
+            password: hashedPassword,
+            role: Role.GUEST,
+            isSuperAdmin: email.toLowerCase() === "fifingabire25@gmail.com",
+            avatar: null,
+            bio: null,
+          },
         });
         res.status(201).json(withoutSensitiveFields(user));
         Promise.resolve()
           .then(() => sendEmail(user.email, "Welcome to ListOn!", welcomeEmail(user.name, user.role)))
           .catch((err) => console.error("Failed to send welcome email:", err));
+        notifyAdmins("New user registered", `<p>${user.name} (${user.email}) just registered as ${user.role}.</p>`);
       }
       return;
     }
@@ -63,6 +86,7 @@ export const register = async (req: Request, res: Response, next: NextFunction):
         phone,
         password: hashedPassword,
         role: Role.GUEST,
+        isSuperAdmin: email.toLowerCase() === "fifingabire25@gmail.com",
         avatar: null,
         bio: null,
       },
@@ -74,7 +98,8 @@ export const register = async (req: Request, res: Response, next: NextFunction):
     Promise.resolve()
       .then(() => sendEmail(user.email, "Welcome to ListOn!", welcomeEmail(user.name, user.role)))
       .catch((err) => console.error("Failed to send welcome email:", err));
-
+    notifyAdmins("New user registered", `<p>${user.name} (${user.email}) just registered as ${user.role}.</p>`);
+    return;
   } catch (error) {
     next(error);
   }

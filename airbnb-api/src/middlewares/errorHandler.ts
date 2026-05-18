@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { Prisma } from "@prisma/client";
 import { ZodError } from "zod/v4";
+import multer from "multer";
 
 export function errorHandler(
   err: unknown,
@@ -13,6 +14,17 @@ export function errorHandler(
   if (err instanceof ZodError) {
     const message = err.issues.map((i) => i.message).join(", ");
     return res.status(400).json({ message, errors: err.issues });
+  }
+
+  if (err instanceof multer.MulterError) {
+    const message = err.code === "LIMIT_FILE_SIZE"
+      ? "Each image must be 5MB or smaller"
+      : err.message;
+    return res.status(400).json({ message });
+  }
+
+  if (err instanceof Error && err.message === "Only jpeg, png, webp allowed") {
+    return res.status(400).json({ message: err.message });
   }
 
   // Prisma known errors

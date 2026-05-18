@@ -6,6 +6,7 @@ import bookingsRouter from "./bookings.routes.js";
 import reviewsRouter from "./reviews.routes.js";
 import uploadRouter from "./upload.routes.js";
 import aiRouter from "./ai.routes.js";
+import messagesRouter from "./messages.routes.js";
 
 const v1Router = Router();
 
@@ -16,5 +17,6 @@ v1Router.use("/bookings", bookingsRouter);
 v1Router.use("/reviews", reviewsRouter);
 v1Router.use("/upload", uploadRouter);
 v1Router.use("/ai", aiRouter);
+v1Router.use("/messages", messagesRouter);
 
 export default v1Router;
