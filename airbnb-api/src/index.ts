@@ -23,8 +23,8 @@ app.set("trust proxy", 1);
 const allowedOrigins: (string | RegExp)[] = [
   "http://localhost:5173",
   "http://localhost:4173",
-  "https://airbnb-t4hz.onrender.com",
-  /\.onrender\.com$/,
+  "https://airbnb-front-end.vercel.app", 
+  /\.vercel\.app$/,  
 ];
 
 app.use(
