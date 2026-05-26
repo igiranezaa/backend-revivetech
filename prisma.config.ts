@@ -3,12 +3,20 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
+const normalizeDatabaseUrl = (url: string | undefined): string => {
+  const value = (url || "").trim();
+
+  return value
+    .replace(/^DATABASE_URL=/, "")
+    .replace(/^['"]|['"]$/g, "");
+};
+
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"] || "",
+    url: normalizeDatabaseUrl(process.env["DATABASE_URL"]) || "postgresql://user:password@localhost:5432/app",
   },
 });
