@@ -4,12 +4,14 @@ import cors from "cors";
 import "dotenv/config";
 import routes from "./routes/index.js";
 import { prisma } from "./config/prisma.js";
-import { openApiSpec, swaggerHtml } from "./config/openapi.js";
+import { getOpenApiSpec, swaggerHtml } from "./config/openapi.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
 import { rateLimiter } from "./middlewares/rateLimiter.js";
 
 const app = express();
 const PORT = process.env["PORT"] || 5001;
+
+app.set("trust proxy", 1);
 
 // Enable CORS and JSON parsing
 app.use(cors());
@@ -19,8 +21,14 @@ app.use(rateLimiter());
 // API route entry point
 app.use("/api", routes);
 
-app.get("/api-docs.json", (_req: Request, res: Response) => {
-  res.status(200).json(openApiSpec);
+app.get("/api-docs.json", (req: Request, res: Response) => {
+  const forwardedProto = req.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const forwardedHost = req.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const protocol = forwardedProto || req.protocol;
+  const host = forwardedHost || req.get("host") || `localhost:${PORT}`;
+  const baseUrl = `${protocol}://${host}`;
+
+  res.status(200).json(getOpenApiSpec(baseUrl));
 });
 
 app.get("/api-docs", (_req: Request, res: Response) => {

@@ -521,6 +521,16 @@ export const openApiSpec = {
   },
 } as const;
 
+export const getOpenApiSpec = (baseUrl: string) => ({
+  ...openApiSpec,
+  servers: [
+    {
+      url: baseUrl,
+      description: "Current server",
+    },
+  ],
+});
+
 export const swaggerHtml = `<!doctype html>
 <html lang="en">
   <head>
