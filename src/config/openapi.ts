@@ -140,6 +140,33 @@ export const openApiSpec = {
         responses: { "200": { description: "Users list" } },
       },
     },
+    "/api/users/admin/users/{id}": {
+      get: {
+        tags: ["Users"],
+        summary: "Admin get user",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "User details" } },
+      },
+      put: {
+        tags: ["Users"],
+        summary: "Admin update user",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { example: { firstName: "Aline", role: "TECHNICIAN", status: "ACTIVE", isVerified: true } } },
+        },
+        responses: { "200": { description: "User updated" } },
+      },
+      delete: {
+        tags: ["Users"],
+        summary: "Admin delete user",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "User deleted" } },
+      },
+    },
     "/api/users/admin/role": {
       put: {
         tags: ["Users"],
@@ -150,6 +177,20 @@ export const openApiSpec = {
           content: { "application/json": { example: { userId: "uuid", role: "TECHNICIAN" } } },
         },
         responses: { "200": { description: "Role updated" } },
+      },
+    },
+    "/api/devices": {
+      get: {
+        tags: ["Devices"],
+        summary: "List devices",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: "brand", in: "query", schema: { type: "string" } },
+          { name: "condition", in: "query", schema: { type: "string" } },
+          { name: "status", in: "query", schema: { type: "string" } },
+          { name: "search", in: "query", schema: { type: "string" } },
+        ],
+        responses: { "200": { description: "Devices" } },
       },
     },
     "/api/devices/intake": {
@@ -248,6 +289,60 @@ export const openApiSpec = {
         responses: { "200": { description: "Trade-in updated" } },
       },
     },
+    "/api/devices/trade-in/{id}": {
+      get: {
+        tags: ["Devices"],
+        summary: "Get trade-in request",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Trade-in request" } },
+      },
+      put: {
+        tags: ["Devices"],
+        summary: "Review trade-in request",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { example: { status: "APPROVED" } } },
+        },
+        responses: { "200": { description: "Trade-in updated" } },
+      },
+      delete: {
+        tags: ["Devices"],
+        summary: "Delete trade-in request",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Trade-in deleted" } },
+      },
+    },
+    "/api/devices/{id}": {
+      get: {
+        tags: ["Devices"],
+        summary: "Get device",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Device details" } },
+      },
+      put: {
+        tags: ["Devices"],
+        summary: "Update device",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { example: { status: "READY", price: 520, batteryHealth: 90 } } },
+        },
+        responses: { "200": { description: "Device updated" } },
+      },
+      delete: {
+        tags: ["Devices"],
+        summary: "Delete device",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Device deleted" } },
+      },
+    },
     "/api/marketplace": {
       get: {
         tags: ["Marketplace"],
@@ -279,6 +374,24 @@ export const openApiSpec = {
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         responses: { "200": { description: "Listing details" } },
       },
+      put: {
+        tags: ["Marketplace"],
+        summary: "Update listing",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { example: { title: "iPhone 13 refurbished", price: 499, status: "ACTIVE" } } },
+        },
+        responses: { "200": { description: "Listing updated" } },
+      },
+      delete: {
+        tags: ["Marketplace"],
+        summary: "Delete listing",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Listing deleted" } },
+      },
     },
     "/api/marketplace/smart-pricing": {
       post: {
@@ -305,6 +418,17 @@ export const openApiSpec = {
       },
     },
     "/api/payments/financing": {
+      get: {
+        tags: ["Payments"],
+        summary: "List financing applications",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: "status", in: "query", schema: { type: "string" } },
+          { name: "customerId", in: "query", schema: { type: "string" } },
+          { name: "deviceId", in: "query", schema: { type: "string" } },
+        ],
+        responses: { "200": { description: "Financing applications" } },
+      },
       post: {
         tags: ["Payments"],
         summary: "Submit financing application",
@@ -334,6 +458,24 @@ export const openApiSpec = {
         security: [{ bearerAuth: [] }],
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         responses: { "200": { description: "Financing details" } },
+      },
+      put: {
+        tags: ["Payments"],
+        summary: "Update financing application",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { example: { status: "APPROVED", officerRecommendation: "Approved for 12 months" } } },
+        },
+        responses: { "200": { description: "Financing updated" } },
+      },
+      delete: {
+        tags: ["Payments"],
+        summary: "Delete financing application",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Financing deleted" } },
       },
     },
     "/api/payments/financing/review": {
@@ -397,6 +539,13 @@ export const openApiSpec = {
         },
         responses: { "200": { description: "Refurbishment updated" } },
       },
+      delete: {
+        tags: ["Refurbishments"],
+        summary: "Delete refurbishment",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Refurbishment deleted" } },
+      },
     },
     "/api/sustainability-jobs": {
       get: {
@@ -427,6 +576,13 @@ export const openApiSpec = {
       },
     },
     "/api/sustainability-jobs/{id}": {
+      get: {
+        tags: ["Sustainability Jobs"],
+        summary: "Get sustainability job",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Sustainability job" } },
+      },
       put: {
         tags: ["Sustainability Jobs"],
         summary: "Update sustainability job",
@@ -437,6 +593,13 @@ export const openApiSpec = {
           content: { "application/json": { example: { status: "COMPLETED", eWasteSavedKg: 3, carbonSavedKg: 25 } } },
         },
         responses: { "200": { description: "Sustainability job updated" } },
+      },
+      delete: {
+        tags: ["Sustainability Jobs"],
+        summary: "Delete sustainability job",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Sustainability job deleted" } },
       },
     },
     "/api/ai/support-chat": {

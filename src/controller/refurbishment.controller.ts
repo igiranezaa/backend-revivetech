@@ -168,3 +168,31 @@ export const updateRefurbishment = async (req: AuthenticatedRequest, res: Respon
     res.status(500).json({ message: "Failed to update refurbishment record", error: error.message });
   }
 };
+
+export const deleteRefurbishment = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseOptionalString(req.params["id"]);
+    if (!id) {
+      sendMissingFields(res, ["id"]);
+      return;
+    }
+
+    const existing = await prisma.refurbishment.findUnique({ where: { id } });
+    if (!existing) {
+      res.status(404).json({ message: "Refurbishment record not found" });
+      return;
+    }
+
+    await prisma.refurbishment.delete({ where: { id } });
+
+    await writeAuditLog({
+      action: "REFURBISHMENT_DELETE",
+      details: `Refurbishment ${id} deleted.`,
+      userId: req.user?.id || null,
+    });
+
+    res.status(200).json({ message: "Refurbishment record deleted successfully" });
+  } catch (error: any) {
+    res.status(500).json({ message: "Failed to delete refurbishment record", error: error.message });
+  }
+};

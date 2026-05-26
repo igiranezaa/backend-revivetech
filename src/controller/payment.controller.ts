@@ -1,7 +1,7 @@
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
 import { prisma } from "../config/prisma.js";
-import { FinancingStatus, RepaymentStatus } from "@prisma/client";
+import { FinancingStatus, RepaymentStatus, UserRole } from "@prisma/client";
 import { AiService } from "../services/ai.service.js";
 import { writeAuditLog } from "../utils/audit-log.js";
 import { parseOptionalString } from "../utils/request.js";
@@ -62,6 +62,37 @@ export const submitFinancing = async (req: AuthenticatedRequest, res: Response):
   }
 };
 
+export const listFinancingApplications = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { status, customerId, deviceId } = req.query;
+    const isStaff = req.user?.role === UserRole.ADMIN || req.user?.role === UserRole.FINANCE_OFFICER;
+
+    const where: any = {
+      ...(isStaff ? {} : { customerId: req.user!.id }),
+      ...(customerId && isStaff ? { customerId: customerId as string } : {}),
+      ...(deviceId ? { deviceId: deviceId as string } : {}),
+    };
+
+    if (status && Object.values(FinancingStatus).includes(status as FinancingStatus)) {
+      where.status = status as FinancingStatus;
+    }
+
+    const applications = await prisma.financingApplication.findMany({
+      where,
+      include: {
+        customer: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
+        device: true,
+        repayments: { orderBy: { dueDate: "asc" } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    res.status(200).json({ applications });
+  } catch (error: any) {
+    res.status(500).json({ message: "Failed to list financing applications", error: error.message });
+  }
+};
+
 export const getFinancingDetails = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const id = parseOptionalString(req.params["id"]);
@@ -89,9 +120,104 @@ export const getFinancingDetails = async (req: AuthenticatedRequest, res: Respon
       return;
     }
 
+    const isStaff = req.user?.role === UserRole.ADMIN || req.user?.role === UserRole.FINANCE_OFFICER;
+    if (!isStaff && application.customerId !== req.user?.id) {
+      res.status(403).json({ message: "Forbidden: You can only view your own financing applications" });
+      return;
+    }
+
     res.status(200).json({ application });
   } catch (error: any) {
     res.status(500).json({ message: "Failed to retrieve financing details", error: error.message });
+  }
+};
+
+export const updateFinancingApplication = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseOptionalString(req.params["id"]);
+    if (!id) {
+      res.status(400).json({ message: "Financing application id is required" });
+      return;
+    }
+
+    const {
+      status,
+      installmentMonths,
+      monthlyRepayment,
+      riskSummary,
+      fraudFlags,
+      paymentAbilityScore,
+      officerRecommendation,
+      approvedById,
+    } = req.body;
+
+    if (status && !Object.values(FinancingStatus).includes(status)) {
+      res.status(400).json({ message: "Invalid financing status value" });
+      return;
+    }
+
+    const existing = await prisma.financingApplication.findUnique({ where: { id } });
+    if (!existing) {
+      res.status(404).json({ message: "Financing application not found" });
+      return;
+    }
+
+    const application = await prisma.financingApplication.update({
+      where: { id },
+      data: {
+        ...(status ? { status: status as FinancingStatus } : {}),
+        ...(installmentMonths !== undefined ? { installmentMonths: Number(installmentMonths) } : {}),
+        ...(monthlyRepayment !== undefined ? { monthlyRepayment: Number(monthlyRepayment) } : {}),
+        ...(riskSummary !== undefined ? { riskSummary } : {}),
+        ...(fraudFlags !== undefined ? { fraudFlags } : {}),
+        ...(paymentAbilityScore !== undefined ? { paymentAbilityScore: Number(paymentAbilityScore) } : {}),
+        ...(officerRecommendation !== undefined ? { officerRecommendation } : {}),
+        ...(approvedById !== undefined ? { approvedById: approvedById || null } : {}),
+      },
+      include: {
+        customer: { select: { id: true, firstName: true, lastName: true, email: true } },
+        device: true,
+        repayments: { orderBy: { dueDate: "asc" } },
+      },
+    });
+
+    await writeAuditLog({
+      action: "FINANCING_UPDATE",
+      details: `Financing application ${id} updated by ${req.user?.email}.`,
+      userId: req.user?.id || null,
+    });
+
+    res.status(200).json({ message: "Financing application updated successfully", application });
+  } catch (error: any) {
+    res.status(500).json({ message: "Failed to update financing application", error: error.message });
+  }
+};
+
+export const deleteFinancingApplication = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseOptionalString(req.params["id"]);
+    if (!id) {
+      res.status(400).json({ message: "Financing application id is required" });
+      return;
+    }
+
+    const existing = await prisma.financingApplication.findUnique({ where: { id } });
+    if (!existing) {
+      res.status(404).json({ message: "Financing application not found" });
+      return;
+    }
+
+    await prisma.financingApplication.delete({ where: { id } });
+
+    await writeAuditLog({
+      action: "FINANCING_DELETE",
+      details: `Financing application ${id} deleted by ${req.user?.email}.`,
+      userId: req.user?.id || null,
+    });
+
+    res.status(200).json({ message: "Financing application deleted successfully" });
+  } catch (error: any) {
+    res.status(500).json({ message: "Failed to delete financing application", error: error.message });
   }
 };
 

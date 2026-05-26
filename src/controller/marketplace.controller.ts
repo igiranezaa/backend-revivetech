@@ -175,6 +175,85 @@ export const createListing = async (req: AuthenticatedRequest, res: Response): P
   }
 };
 
+export const updateListing = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseOptionalString(req.params["id"]);
+    if (!id) {
+      res.status(400).json({ message: "Listing id is required" });
+      return;
+    }
+
+    const { title, description, price, status } = req.body;
+
+    if (status && !Object.values(ListingStatus).includes(status)) {
+      res.status(400).json({ message: "Invalid listing status value" });
+      return;
+    }
+
+    const listing = await prisma.marketplaceListing.findUnique({ where: { id } });
+    if (!listing) {
+      res.status(404).json({ message: "Listing not found" });
+      return;
+    }
+
+    const updatedListing = await prisma.marketplaceListing.update({
+      where: { id },
+      data: {
+        ...(title !== undefined ? { title } : {}),
+        ...(description !== undefined ? { description } : {}),
+        ...(price !== undefined ? { price: Number(price) } : {}),
+        ...(status ? { status: status as ListingStatus } : {}),
+      },
+      include: { device: true },
+    });
+
+    if (price !== undefined) {
+      await prisma.device.update({
+        where: { id: listing.deviceId },
+        data: { price: Number(price) },
+      });
+    }
+
+    await writeAuditLog({
+      action: "MARKETPLACE_LISTING_UPDATE",
+      details: `Admin ${req.user?.email} updated marketplace listing ${id}.`,
+      userId: req.user?.id || null,
+    });
+
+    res.status(200).json({ message: "Listing updated successfully", listing: updatedListing });
+  } catch (error: any) {
+    res.status(500).json({ message: "Failed to update listing", error: error.message });
+  }
+};
+
+export const deleteListing = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseOptionalString(req.params["id"]);
+    if (!id) {
+      res.status(400).json({ message: "Listing id is required" });
+      return;
+    }
+
+    const listing = await prisma.marketplaceListing.findUnique({ where: { id } });
+    if (!listing) {
+      res.status(404).json({ message: "Listing not found" });
+      return;
+    }
+
+    await prisma.marketplaceListing.delete({ where: { id } });
+
+    await writeAuditLog({
+      action: "MARKETPLACE_LISTING_DELETE",
+      details: `Admin ${req.user?.email} deleted marketplace listing ${id}.`,
+      userId: req.user?.id || null,
+    });
+
+    res.status(200).json({ message: "Listing deleted successfully" });
+  } catch (error: any) {
+    res.status(500).json({ message: "Failed to delete listing", error: error.message });
+  }
+};
+
 export const triggerSmartPricing = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { listingId } = req.body;

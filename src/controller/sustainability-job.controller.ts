@@ -74,6 +74,33 @@ export const listSustainabilityJobs = async (req: AuthenticatedRequest, res: Res
   }
 };
 
+export const getSustainabilityJob = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseOptionalString(req.params["id"]);
+    if (!id) {
+      sendMissingFields(res, ["id"]);
+      return;
+    }
+
+    const job = await prisma.sustainabilityJob.findUnique({
+      where: { id },
+      include: {
+        device: true,
+        assignedTo: { select: { id: true, firstName: true, lastName: true, email: true } },
+      },
+    });
+
+    if (!job) {
+      res.status(404).json({ message: "Sustainability job not found" });
+      return;
+    }
+
+    res.status(200).json({ job });
+  } catch (error: any) {
+    res.status(500).json({ message: "Failed to get sustainability job", error: error.message });
+  }
+};
+
 export const updateSustainabilityJob = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const id = parseOptionalString(req.params["id"]);
@@ -123,5 +150,33 @@ export const updateSustainabilityJob = async (req: AuthenticatedRequest, res: Re
     res.status(200).json({ message: "Sustainability job updated successfully", job });
   } catch (error: any) {
     res.status(500).json({ message: "Failed to update sustainability job", error: error.message });
+  }
+};
+
+export const deleteSustainabilityJob = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseOptionalString(req.params["id"]);
+    if (!id) {
+      sendMissingFields(res, ["id"]);
+      return;
+    }
+
+    const existing = await prisma.sustainabilityJob.findUnique({ where: { id } });
+    if (!existing) {
+      res.status(404).json({ message: "Sustainability job not found" });
+      return;
+    }
+
+    await prisma.sustainabilityJob.delete({ where: { id } });
+
+    await writeAuditLog({
+      action: "SUSTAINABILITY_JOB_DELETE",
+      details: `Sustainability job ${id} deleted.`,
+      userId: req.user?.id || null,
+    });
+
+    res.status(200).json({ message: "Sustainability job deleted successfully" });
+  } catch (error: any) {
+    res.status(500).json({ message: "Failed to delete sustainability job", error: error.message });
   }
 };

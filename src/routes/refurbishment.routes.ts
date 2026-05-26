@@ -2,6 +2,7 @@ import { Router } from "express";
 import { UserRole } from "@prisma/client";
 import {
   createRefurbishment,
+  deleteRefurbishment,
   getRefurbishment,
   listRefurbishments,
   updateRefurbishment,
@@ -14,5 +15,6 @@ router.get("/", requireAuth, requireRoles([UserRole.ADMIN, UserRole.TECHNICIAN])
 router.get("/:id", requireAuth, requireRoles([UserRole.ADMIN, UserRole.TECHNICIAN]), getRefurbishment);
 router.post("/", requireAuth, requireRoles([UserRole.ADMIN, UserRole.TECHNICIAN]), createRefurbishment);
 router.put("/:id", requireAuth, requireRoles([UserRole.ADMIN, UserRole.TECHNICIAN]), updateRefurbishment);
+router.delete("/:id", requireAuth, requireRoles([UserRole.ADMIN]), deleteRefurbishment);
 
 export default router;

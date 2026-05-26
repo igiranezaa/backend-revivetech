@@ -1,7 +1,7 @@
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
 import { prisma } from "../config/prisma.js";
-import { DeviceCondition, DeviceStatus, TradeInStatus } from "@prisma/client";
+import { DeviceCondition, DeviceStatus, ListingStatus, TradeInStatus, UserRole } from "@prisma/client";
 import { AiService } from "../services/ai.service.js";
 import { writeAuditLog } from "../utils/audit-log.js";
 import { parseOptionalString } from "../utils/request.js";
@@ -89,6 +89,188 @@ export const intakeDevice = async (req: AuthenticatedRequest, res: Response): Pr
     res.status(201).json({ message: "Device registered in intake successfully", device });
   } catch (error: any) {
     res.status(500).json({ message: "Intake registration failed", error: error.message });
+  }
+};
+
+export const listDevices = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { brand, condition, status, ownerId, search } = req.query;
+
+    const where: any = {};
+    if (brand) where.brand = { contains: brand as string, mode: "insensitive" };
+    if (condition && Object.values(DeviceCondition).includes(condition as DeviceCondition)) {
+      where.condition = condition as DeviceCondition;
+    }
+    if (status && Object.values(DeviceStatus).includes(status as DeviceStatus)) {
+      where.status = status as DeviceStatus;
+    }
+    if (ownerId) where.ownerId = ownerId as string;
+    if (search) {
+      where.OR = [
+        { brand: { contains: search as string, mode: "insensitive" } },
+        { model: { contains: search as string, mode: "insensitive" } },
+        { originalSerialNumber: { contains: search as string, mode: "insensitive" } },
+      ];
+    }
+
+    const devices = await prisma.device.findMany({
+      where,
+      include: {
+        owner: { select: { id: true, firstName: true, lastName: true, email: true } },
+        listings: true,
+        passport: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    res.status(200).json({ devices });
+  } catch (error: any) {
+    res.status(500).json({ message: "Failed to list devices", error: error.message });
+  }
+};
+
+export const getDevice = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseOptionalString(req.params["id"]);
+    if (!id) {
+      res.status(400).json({ message: "Device id is required" });
+      return;
+    }
+
+    const device = await prisma.device.findUnique({
+      where: { id },
+      include: {
+        owner: { select: { id: true, firstName: true, lastName: true, email: true } },
+        repairLogs: true,
+        passport: true,
+        listings: true,
+        refurbishments: true,
+        sustainabilityJobs: true,
+      },
+    });
+
+    if (!device) {
+      res.status(404).json({ message: "Device not found" });
+      return;
+    }
+
+    res.status(200).json({ device });
+  } catch (error: any) {
+    res.status(500).json({ message: "Failed to get device", error: error.message });
+  }
+};
+
+export const updateDevice = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseOptionalString(req.params["id"]);
+    if (!id) {
+      res.status(400).json({ message: "Device id is required" });
+      return;
+    }
+
+    const existingDevice = await prisma.device.findUnique({ where: { id }, include: { repairLogs: true } });
+    if (!existingDevice) {
+      res.status(404).json({ message: "Device not found" });
+      return;
+    }
+
+    const {
+      brand,
+      model,
+      originalSerialNumber,
+      condition,
+      status,
+      batteryHealth,
+      repairNotes,
+      basePrice,
+      price,
+      ownerId,
+    } = req.body;
+
+    if (condition && !Object.values(DeviceCondition).includes(condition)) {
+      res.status(400).json({ message: "Invalid condition value" });
+      return;
+    }
+
+    if (status && !Object.values(DeviceStatus).includes(status)) {
+      res.status(400).json({ message: "Invalid status value" });
+      return;
+    }
+
+    const nextBrand = brand !== undefined ? brand : existingDevice.brand;
+    const nextModel = model !== undefined ? model : existingDevice.model;
+    const nextCondition = condition ? (condition as DeviceCondition) : existingDevice.condition;
+    const nextBatteryHealth = batteryHealth !== undefined ? Number(batteryHealth) : existingDevice.batteryHealth;
+    const { eWasteSavedKg, carbonSavedKg } = calculateSustainabilityMetrics(nextBrand, nextModel);
+
+    const device = await prisma.device.update({
+      where: { id },
+      data: {
+        ...(brand !== undefined ? { brand } : {}),
+        ...(model !== undefined ? { model } : {}),
+        ...(originalSerialNumber !== undefined ? { originalSerialNumber: originalSerialNumber || null } : {}),
+        ...(condition ? { condition: nextCondition } : {}),
+        ...(status ? { status: status as DeviceStatus } : {}),
+        ...(batteryHealth !== undefined ? { batteryHealth: nextBatteryHealth } : {}),
+        ...(repairNotes !== undefined ? { repairNotes } : {}),
+        ...(basePrice !== undefined ? { basePrice: Number(basePrice) } : {}),
+        ...(price !== undefined ? { price: Number(price) } : {}),
+        ...(ownerId !== undefined ? { ownerId: ownerId || null } : {}),
+        trustScore: calculateTrustScore(nextCondition, nextBatteryHealth, existingDevice.repairLogs.length),
+        eWasteSavedKg,
+        carbonSavedKg,
+      },
+      include: {
+        owner: { select: { id: true, firstName: true, lastName: true, email: true } },
+        passport: true,
+        listings: true,
+      },
+    });
+
+    await writeAuditLog({
+      action: "DEVICE_UPDATE",
+      details: `User ${req.user?.email} updated device ${device.brand} ${device.model} (${device.id}).`,
+      userId: req.user?.id || null,
+    });
+
+    res.status(200).json({ message: "Device updated successfully", device });
+  } catch (error: any) {
+    res.status(500).json({ message: "Failed to update device", error: error.message });
+  }
+};
+
+export const deleteDevice = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseOptionalString(req.params["id"]);
+    if (!id) {
+      res.status(400).json({ message: "Device id is required" });
+      return;
+    }
+
+    const existingDevice = await prisma.device.findUnique({ where: { id } });
+    if (!existingDevice) {
+      res.status(404).json({ message: "Device not found" });
+      return;
+    }
+
+    await prisma.device.update({
+      where: { id },
+      data: { status: DeviceStatus.ARCHIVED },
+    });
+    await prisma.marketplaceListing.updateMany({
+      where: { deviceId: id },
+      data: { status: ListingStatus.INACTIVE },
+    });
+
+    await writeAuditLog({
+      action: "DEVICE_DELETE",
+      details: `User ${req.user?.email} deleted device ${existingDevice.brand} ${existingDevice.model} (${id}).`,
+      userId: req.user?.id || null,
+    });
+
+    res.status(200).json({ message: "Device deleted successfully" });
+  } catch (error: any) {
+    res.status(500).json({ message: "Failed to delete device", error: error.message });
   }
 };
 
@@ -347,9 +529,42 @@ export const listTradeIns = async (req: AuthenticatedRequest, res: Response): Pr
   }
 };
 
+export const getTradeIn = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseOptionalString(req.params["id"]);
+    if (!id) {
+      res.status(400).json({ message: "Trade-in request id is required" });
+      return;
+    }
+
+    const tradeIn = await prisma.tradeInRequest.findUnique({
+      where: { id },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
+      },
+    });
+
+    if (!tradeIn) {
+      res.status(404).json({ message: "Trade-in request not found" });
+      return;
+    }
+
+    const canView = req.user?.role === UserRole.ADMIN || req.user?.role === UserRole.FINANCE_OFFICER || tradeIn.userId === req.user?.id;
+    if (!canView) {
+      res.status(403).json({ message: "Forbidden: You can only view your own trade-in requests" });
+      return;
+    }
+
+    res.status(200).json({ tradeIn });
+  } catch (error: any) {
+    res.status(500).json({ message: "Failed to retrieve trade-in request", error: error.message });
+  }
+};
+
 export const reviewTradeIn = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { tradeInId, status } = req.body;
+    const tradeInId = parseOptionalString(req.params["id"]) || req.body.tradeInId;
+    const { status } = req.body;
 
     if (!tradeInId || !status) {
       res.status(400).json({ message: "Required fields: tradeInId, status" });
@@ -393,7 +608,34 @@ export const reviewTradeIn = async (req: AuthenticatedRequest, res: Response): P
 
     res.status(200).json({ message: `Trade-in request marked as ${status}`, tradeIn: updatedTradeIn });
   } catch (error: any) {
-    // Wait, let's fix the variable typo: updatedDeviceForRes -> updatedTradeIn
     res.status(500).json({ message: "Failed to review trade-in", error: error.message });
+  }
+};
+
+export const deleteTradeIn = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseOptionalString(req.params["id"]);
+    if (!id) {
+      res.status(400).json({ message: "Trade-in request id is required" });
+      return;
+    }
+
+    const tradeIn = await prisma.tradeInRequest.findUnique({ where: { id } });
+    if (!tradeIn) {
+      res.status(404).json({ message: "Trade-in request not found" });
+      return;
+    }
+
+    const canDelete = req.user?.role === UserRole.ADMIN || tradeIn.userId === req.user?.id;
+    if (!canDelete) {
+      res.status(403).json({ message: "Forbidden: You can only delete your own trade-in requests" });
+      return;
+    }
+
+    await prisma.tradeInRequest.delete({ where: { id } });
+
+    res.status(200).json({ message: "Trade-in request deleted successfully" });
+  } catch (error: any) {
+    res.status(500).json({ message: "Failed to delete trade-in request", error: error.message });
   }
 };
