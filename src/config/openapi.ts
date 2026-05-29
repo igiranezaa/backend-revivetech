@@ -681,6 +681,70 @@ export const openApiSpec = {
         responses: { "200": { description: "Sustainability report" } },
       },
     },
+    "/api/data/models": {
+      get: {
+        tags: ["Admin"],
+        summary: "List readable Prisma models",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Available model keys for generic data reads" } },
+      },
+    },
+    "/api/data/{model}": {
+      get: {
+        tags: ["Admin"],
+        summary: "Get all records for any model",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: "model",
+            in: "path",
+            required: true,
+            schema: {
+              type: "string",
+              enum: [
+                "users",
+                "devices",
+                "device-passports",
+                "repair-logs",
+                "marketplace-listings",
+                "financing-applications",
+                "installment-repayments",
+                "orders",
+                "order-items",
+                "trade-in-requests",
+                "support-chat-sessions",
+                "support-chat-messages",
+                "trust-scores",
+                "refurbishments",
+                "ai-interactions",
+                "sustainability-jobs",
+                "carts",
+                "cart-items",
+                "wishlists",
+                "payments",
+                "notifications",
+                "system-logs",
+              ],
+            },
+          },
+          { name: "page", in: "query", schema: { type: "integer", default: 1 } },
+          { name: "limit", in: "query", schema: { type: "integer", default: 50 } },
+        ],
+        responses: { "200": { description: "Model records" } },
+      },
+    },
+    "/api/data/{model}/{id}": {
+      get: {
+        tags: ["Admin"],
+        summary: "Get one record by id for any model",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: "model", in: "path", required: true, schema: { type: "string" } },
+          { name: "id", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: { "200": { description: "Model record" } },
+      },
+    },
   },
 } as const;
 

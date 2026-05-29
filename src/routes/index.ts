@@ -9,6 +9,7 @@ import aiRoutes from "./ai.routes.js";
 import refurbishmentRoutes from "./refurbishment.routes.js";
 import sustainabilityJobRoutes from "./sustainability-job.routes.js";
 import notificationRoutes from "./notification.routes.js";
+import dataRoutes from "./data.routes.js";
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.use("/ai", aiRoutes);
 router.use("/refurbishments", refurbishmentRoutes);
 router.use("/sustainability-jobs", sustainabilityJobRoutes);
 router.use("/notifications", notificationRoutes);
+router.use("/data", dataRoutes);
 
 export default router;
