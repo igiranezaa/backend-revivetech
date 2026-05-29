@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "DOTENV_CONFIG_PATH=src/.env tsx watch src/server.ts",
     "build": "DOTENV_CONFIG_PATH=src/.env prisma generate && tsc",
-    "start": "prisma db push && tsx src/server.ts",
-    "seed": "prisma db seed"
+    "start": "DOTENV_CONFIG_PATH=src/.env prisma db push && DOTENV_CONFIG_PATH=src/.env prisma db seed && DOTENV_CONFIG_PATH=src/.env tsx src/server.ts",
+    "seed": "DOTENV_CONFIG_PATH=src/.env prisma db seed"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -31,7 +31,7 @@ const main = async () => {
 
   const admin = await prisma.user.upsert({
     where: { email: "admin@example.com" },
-    update: { role: UserRole.ADMIN, isVerified: true },
+    update: { password, role: UserRole.ADMIN, isVerified: true, otpCode: null, otpExpiresAt: null },
     create: {
       firstName: "Admin",
       lastName: "User",
@@ -45,7 +45,7 @@ const main = async () => {
 
   const customer = await prisma.user.upsert({
     where: { email: "aline@example.com" },
-    update: { role: UserRole.CUSTOMER, isVerified: true },
+    update: { password, role: UserRole.CUSTOMER, isVerified: true, otpCode: null, otpExpiresAt: null },
     create: {
       firstName: "Aline",
       lastName: "Uwase",
@@ -59,7 +59,7 @@ const main = async () => {
 
   const technician = await prisma.user.upsert({
     where: { email: "tech@example.com" },
-    update: { role: UserRole.TECHNICIAN, isVerified: true },
+    update: { password, role: UserRole.TECHNICIAN, isVerified: true, otpCode: null, otpExpiresAt: null },
     create: {
       firstName: "Technician",
       lastName: "One",
@@ -73,7 +73,7 @@ const main = async () => {
 
   const financeOfficer = await prisma.user.upsert({
     where: { email: "finance@example.com" },
-    update: { role: UserRole.FINANCE_OFFICER, isVerified: true },
+    update: { password, role: UserRole.FINANCE_OFFICER, isVerified: true, otpCode: null, otpExpiresAt: null },
     create: {
       firstName: "Finance",
       lastName: "Officer",
@@ -87,7 +87,7 @@ const main = async () => {
 
   const supportAgent = await prisma.user.upsert({
     where: { email: "support@example.com" },
-    update: { role: UserRole.SUPPORT_AGENT, isVerified: true },
+    update: { password, role: UserRole.SUPPORT_AGENT, isVerified: true, otpCode: null, otpExpiresAt: null },
     create: {
       firstName: "Support",
       lastName: "Agent",
