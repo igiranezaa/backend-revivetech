@@ -1,5 +1,6 @@
 import { prisma } from "../config/prisma.js";
 import { DeviceCondition } from "@prisma/client";
+import { ChatOpenAI } from "@langchain/openai";
 
 interface ValuationRequest {
   brand: string;
@@ -57,29 +58,20 @@ export class AiService {
     }
 
     try {
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
+      const model = new ChatOpenAI({
+        apiKey,
+        model: process.env["OPENAI_MODEL"] || "gpt-4o-mini",
+        temperature: 0,
+        maxRetries: 2,
+        modelKwargs: {
+          response_format: { type: "json_object" },
         },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [
-            { role: "system", content: systemPrompt + " Return your response ONLY as a raw JSON object matching the requested schema." },
-            { role: "user", content: userPrompt }
-          ],
-          response_format: { type: "json_object" }
-        })
       });
-
-      if (!response.ok) {
-        console.warn("OpenAI API call failed, using local simulation fallback.");
-        return fallback;
-      }
-
-      const data = await response.json();
-      const content = data.choices[0]?.message?.content;
+      const response = await model.invoke([
+        ["system", `${systemPrompt} Return your response ONLY as a raw JSON object matching the requested schema.`],
+        ["human", userPrompt],
+      ]);
+      const content = typeof response.content === "string" ? response.content : null;
       if (content) {
         return JSON.parse(content) as T;
       }

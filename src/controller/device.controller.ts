@@ -283,6 +283,11 @@ export const updateRepairStatus = async (req: AuthenticatedRequest, res: Respons
       return;
     }
 
+    if (status !== DeviceStatus.DIAGNOSTIC && status !== DeviceStatus.REPAIRING) {
+      res.status(400).json({ message: "Repair status must be DIAGNOSTIC or REPAIRING" });
+      return;
+    }
+
     const device = await prisma.device.findUnique({ where: { id: deviceId } });
     if (!device) {
       res.status(404).json({ message: "Device not found" });
@@ -337,6 +342,11 @@ export const submitQcCheck = async (req: AuthenticatedRequest, res: Response): P
       return;
     }
 
+    if (device.status !== DeviceStatus.DIAGNOSTIC && device.status !== DeviceStatus.REPAIRING) {
+      res.status(400).json({ message: "Device must be in diagnostics or repair before quality control" });
+      return;
+    }
+
     const updatedDevice = await prisma.device.update({
       where: { id: deviceId },
       data: { status: DeviceStatus.QC },
@@ -363,6 +373,11 @@ export const certifyDevice = async (req: AuthenticatedRequest, res: Response): P
     });
     if (!device) {
       res.status(404).json({ message: "Device not found" });
+      return;
+    }
+
+    if (device.status !== DeviceStatus.QC) {
+      res.status(400).json({ message: "Device must pass quality control before certification" });
       return;
     }
 
@@ -514,7 +529,9 @@ export const submitTradeIn = async (req: AuthenticatedRequest, res: Response): P
 
 export const listTradeIns = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const isStaff = req.user?.role === UserRole.ADMIN || req.user?.role === UserRole.FINANCE_OFFICER;
     const tradeIns = await prisma.tradeInRequest.findMany({
+      where: isStaff ? {} : { userId: req.user!.id },
       include: {
         user: {
           select: { firstName: true, lastName: true, email: true }
@@ -579,6 +596,11 @@ export const reviewTradeIn = async (req: AuthenticatedRequest, res: Response): P
     const tradeIn = await prisma.tradeInRequest.findUnique({ where: { id: tradeInId } });
     if (!tradeIn) {
       res.status(404).json({ message: "Trade-in request not found" });
+      return;
+    }
+
+    if (tradeIn.status === TradeInStatus.COMPLETED) {
+      res.status(400).json({ message: "Completed trade-in requests cannot be reviewed again" });
       return;
     }
 

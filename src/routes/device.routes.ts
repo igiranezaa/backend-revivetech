@@ -34,7 +34,7 @@ router.get("/passport/:deviceId", getDigitalPassport);
 router.post("/trade-in", requireAuth, submitTradeIn);
 
 // Management Trade-In routes
-router.get("/trade-in", requireAuth, requireRoles([UserRole.ADMIN, UserRole.FINANCE_OFFICER]), listTradeIns);
+router.get("/trade-in", requireAuth, listTradeIns);
 router.get("/trade-in/:id", requireAuth, getTradeIn);
 router.put("/trade-in", requireAuth, requireRoles([UserRole.ADMIN, UserRole.FINANCE_OFFICER]), reviewTradeIn);
 router.put("/trade-in/:id", requireAuth, requireRoles([UserRole.ADMIN, UserRole.FINANCE_OFFICER]), reviewTradeIn);

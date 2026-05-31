@@ -43,7 +43,7 @@ export const checkFinancingRisk = async (req: AuthenticatedRequest, res: Respons
   try {
     const { monthlyIncome, existingDebts, requestedAmount, creditScore, employmentStatus } = req.body;
 
-    if (!monthlyIncome || !existingDebts || !requestedAmount || !employmentStatus) {
+    if (monthlyIncome === undefined || existingDebts === undefined || requestedAmount === undefined || !employmentStatus) {
       res.status(400).json({
         message: "Required fields: monthlyIncome, existingDebts, requestedAmount, employmentStatus",
       });

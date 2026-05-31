@@ -1,5 +1,5 @@
 import type { Response } from "express";
-import { DeviceStatus, Prisma, RefurbishmentStatus } from "@prisma/client";
+import { DeviceStatus, Prisma, RefurbishmentStatus, UserRole } from "@prisma/client";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
 import { prisma } from "../config/prisma.js";
 import { writeAuditLog } from "../utils/audit-log.js";
@@ -40,7 +40,7 @@ export const createRefurbishment = async (req: AuthenticatedRequest, res: Respon
     const refurbishment = await prisma.refurbishment.create({
       data: {
         deviceId,
-        technicianId: technicianId || req.user?.id || null,
+        technicianId: req.user?.role === UserRole.ADMIN ? technicianId || req.user.id : req.user?.id || null,
         status: refurbishmentStatus,
         diagnostics,
         repairNotes,
@@ -66,9 +66,10 @@ export const createRefurbishment = async (req: AuthenticatedRequest, res: Respon
   }
 };
 
-export const listRefurbishments = async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
+export const listRefurbishments = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const refurbishments = await prisma.refurbishment.findMany({
+      where: req.user?.role === UserRole.TECHNICIAN ? { technicianId: req.user.id } : {},
       include: {
         device: true,
         technician: { select: { id: true, firstName: true, lastName: true, email: true } },
@@ -103,6 +104,11 @@ export const getRefurbishment = async (req: AuthenticatedRequest, res: Response)
       return;
     }
 
+    if (req.user?.role === UserRole.TECHNICIAN && refurbishment.technicianId !== req.user.id) {
+      res.status(403).json({ message: "Forbidden: This refurbishment is assigned to another technician" });
+      return;
+    }
+
     res.status(200).json({ refurbishment });
   } catch (error: any) {
     res.status(500).json({ message: "Failed to get refurbishment record", error: error.message });
@@ -124,6 +130,11 @@ export const updateRefurbishment = async (req: AuthenticatedRequest, res: Respon
       return;
     }
 
+    if (req.user?.role === UserRole.TECHNICIAN && existing.technicianId !== req.user.id) {
+      res.status(403).json({ message: "Forbidden: This refurbishment is assigned to another technician" });
+      return;
+    }
+
     const existingDevice = await prisma.device.findUnique({ where: { id: existing.deviceId } });
     if (!existingDevice) {
       res.status(404).json({ message: "Device not found for refurbishment record" });
@@ -140,7 +151,7 @@ export const updateRefurbishment = async (req: AuthenticatedRequest, res: Respon
 
     if (diagnostics !== undefined) data.diagnostics = diagnostics;
     if (repairNotes !== undefined) data.repairNotes = repairNotes;
-    if (technicianId !== undefined) data.technicianId = technicianId || null;
+    if (technicianId !== undefined && req.user?.role === UserRole.ADMIN) data.technicianId = technicianId || null;
     if (partsUsed !== undefined) data.partsUsed = JSON.stringify(partsUsed);
     if (qcPassed !== undefined) data.qcPassed = Boolean(qcPassed);
     if (certifiedAt) data.certifiedAt = new Date(certifiedAt);

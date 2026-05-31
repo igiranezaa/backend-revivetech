@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { prisma } from "../config/prisma.js";
-import { UserRole } from "@prisma/client";
+import { UserRole, UserStatus } from "@prisma/client";
 import { writeAuditLog } from "../utils/audit-log.js";
 
 // Generate 6 digit numeric OTP
@@ -12,7 +12,7 @@ const generateOtp = (): string => {
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { firstName, lastName, email, phone, password, role } = req.body;
+    const { firstName, lastName, email, phone, password } = req.body;
 
     if (!firstName || !lastName || !email || !password) {
       res.status(400).json({ message: "Required fields: firstName, lastName, email, password" });
@@ -37,8 +37,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     const otp = generateOtp();
     const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
 
-    const requestedRole = role && Object.values(UserRole).includes(role) ? (role as UserRole) : UserRole.CUSTOMER;
-
     const user = await prisma.user.create({
       data: {
         firstName,
@@ -46,7 +44,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         email,
         phone,
         password: hashedPassword,
-        role: requestedRole,
+        role: UserRole.CUSTOMER,
         isVerified: false,
         otpCode: otp,
         otpExpiresAt: otpExpires,
@@ -144,6 +142,11 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     if (!user.isVerified) {
       res.status(403).json({ message: "Account not verified. Please verify using OTP first.", userId: user.id });
+      return;
+    }
+
+    if (user.status !== UserStatus.ACTIVE) {
+      res.status(403).json({ message: "Account is not active. Please contact support." });
       return;
     }
 

@@ -1,7 +1,7 @@
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
 import { prisma } from "../config/prisma.js";
-import { DeviceStatus, ListingStatus, OrderStatus } from "@prisma/client";
+import { DeviceStatus, ListingStatus, OrderStatus, PaymentStatus } from "@prisma/client";
 import { writeAuditLog } from "../utils/audit-log.js";
 import { parseOptionalString } from "../utils/request.js";
 
@@ -340,6 +340,16 @@ export const checkout = async (req: AuthenticatedRequest, res: Response): Promis
         return;
       }
 
+      if (financingApp.customerId !== req.user!.id) {
+        res.status(403).json({ message: "This financing application belongs to another customer" });
+        return;
+      }
+
+      if (deviceIds.length !== 1 || financingApp.deviceId !== deviceIds[0]) {
+        res.status(400).json({ message: "Financing application must match the single device being checked out" });
+        return;
+      }
+
       // Check if financing total matches checkout sum
       if (Math.abs(financingApp.totalAmount - totalAmount) > 1.0) {
         res.status(400).json({
@@ -354,7 +364,8 @@ export const checkout = async (req: AuthenticatedRequest, res: Response): Promis
       data: {
         customerId: req.user!.id,
         totalAmount,
-        status: financingApplicationId ? OrderStatus.PAID : OrderStatus.PENDING, // Paid if approved financing is applied immediately, otherwise pending payout
+        status: financingApplicationId ? OrderStatus.CONFIRMED : OrderStatus.PENDING,
+        paymentStatus: financingApplicationId ? PaymentStatus.PENDING : PaymentStatus.UNPAID,
         financingId: financingApplicationId || null,
         orderItems: {
           create: devices.map(d => ({
@@ -375,6 +386,11 @@ export const checkout = async (req: AuthenticatedRequest, res: Response): Promis
       where: { deviceId: { in: deviceIds } },
       data: { status: ListingStatus.SOLD },
     });
+
+    const cart = await prisma.cart.findUnique({ where: { userId: req.user!.id } });
+    if (cart) {
+      await prisma.cartItem.deleteMany({ where: { cartId: cart.id, deviceId: { in: deviceIds } } });
+    }
 
     // Record digital passport ownership transfer
     for (const device of devices) {

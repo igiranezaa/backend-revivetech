@@ -51,7 +51,7 @@ The actual AI logic is centralized in `src/services/ai.service.ts`.
 
 ### 2. AI service was implemented with fallback behavior
 
-`AiService` tries to call the OpenAI Chat Completions API when `OPENAI_API_KEY` exists in `.env`.
+`AiService` uses LangChain's `ChatOpenAI` integration when `OPENAI_API_KEY` exists in `.env`.
 
 If the key is missing, the API call fails, or OpenAI returns a non-success response, the service falls back to local rule-based logic. This keeps the app testable even without a real AI key.
 
@@ -186,7 +186,7 @@ POST /api/ai/valuation
   -> requireAuth
   -> evaluateDeviceValuation()
   -> AiService.evaluateDevice()
-  -> OpenAI call or local fallback
+  -> LangChain `ChatOpenAI` call or local fallback
   -> prisma.aiInteraction.create()
   -> response with valuation
 ```

@@ -8,6 +8,18 @@ import {
   checkout,
   updateListing,
 } from "../controller/marketplace.controller.js";
+import {
+  addCartItem,
+  addWishlistItem,
+  clearCart,
+  compareDevices,
+  getCart,
+  getOrder,
+  listOrders,
+  listWishlist,
+  removeCartItem,
+  removeWishlistItem,
+} from "../controller/storefront.controller.js";
 import { requireAuth, requireRoles } from "../middleware/auth.js";
 import { UserRole } from "@prisma/client";
 
@@ -15,6 +27,16 @@ const router = Router();
 
 // Publicly browse listings
 router.get("/", getListings);
+router.get("/compare", compareDevices);
+router.get("/cart", requireAuth, getCart);
+router.post("/cart", requireAuth, addCartItem);
+router.delete("/cart", requireAuth, clearCart);
+router.delete("/cart/:deviceId", requireAuth, removeCartItem);
+router.get("/wishlist", requireAuth, listWishlist);
+router.post("/wishlist", requireAuth, addWishlistItem);
+router.delete("/wishlist/:deviceId", requireAuth, removeWishlistItem);
+router.get("/orders", requireAuth, listOrders);
+router.get("/orders/:id", requireAuth, getOrder);
 router.get("/:id", getListingDetails);
 
 // Admin-managed listing creation & optimization

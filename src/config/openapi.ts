@@ -417,6 +417,85 @@ export const openApiSpec = {
         responses: { "201": { description: "Order created" } },
       },
     },
+    "/api/marketplace/compare": {
+      get: {
+        tags: ["Marketplace"],
+        summary: "Compare between two and four available devices",
+        parameters: [{ name: "deviceIds", in: "query", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Comparable device details" } },
+      },
+    },
+    "/api/marketplace/cart": {
+      get: {
+        tags: ["Marketplace"],
+        summary: "Get customer cart",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Cart details" } },
+      },
+      post: {
+        tags: ["Marketplace"],
+        summary: "Add device to customer cart",
+        security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { example: { deviceId: "uuid" } } } },
+        responses: { "201": { description: "Device added to cart" } },
+      },
+      delete: {
+        tags: ["Marketplace"],
+        summary: "Clear customer cart",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Cart cleared" } },
+      },
+    },
+    "/api/marketplace/cart/{deviceId}": {
+      delete: {
+        tags: ["Marketplace"],
+        summary: "Remove device from customer cart",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "deviceId", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Device removed from cart" } },
+      },
+    },
+    "/api/marketplace/wishlist": {
+      get: {
+        tags: ["Marketplace"],
+        summary: "Get customer wishlist",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Wishlist items" } },
+      },
+      post: {
+        tags: ["Marketplace"],
+        summary: "Add device to customer wishlist",
+        security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { example: { deviceId: "uuid" } } } },
+        responses: { "201": { description: "Device added to wishlist" } },
+      },
+    },
+    "/api/marketplace/wishlist/{deviceId}": {
+      delete: {
+        tags: ["Marketplace"],
+        summary: "Remove device from customer wishlist",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "deviceId", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Device removed from wishlist" } },
+      },
+    },
+    "/api/marketplace/orders": {
+      get: {
+        tags: ["Marketplace"],
+        summary: "Get customer order history",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Orders" } },
+      },
+    },
+    "/api/marketplace/orders/{id}": {
+      get: {
+        tags: ["Marketplace"],
+        summary: "Get customer order details",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Order details" } },
+      },
+    },
     "/api/payments/financing": {
       get: {
         tags: ["Payments"],
@@ -497,9 +576,46 @@ export const openApiSpec = {
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
-          content: { "application/json": { example: { repaymentId: "uuid", amount: 50 } } },
+          content: { "application/json": { example: { repaymentId: "uuid", amount: 50, method: "MOBILE_MONEY" } } },
         },
         responses: { "200": { description: "Repayment processed" } },
+      },
+    },
+    "/api/payments/orders": {
+      post: {
+        tags: ["Payments"],
+        summary: "Record an upfront order payment",
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { example: { orderId: "uuid", amount: 520, method: "MOBILE_MONEY" } } },
+        },
+        responses: { "201": { description: "Payment recorded" } },
+      },
+    },
+    "/api/payments/history": {
+      get: {
+        tags: ["Payments"],
+        summary: "List transaction history",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Payments" } },
+      },
+    },
+    "/api/payments/receipt/{id}": {
+      get: {
+        tags: ["Payments"],
+        summary: "Generate payment receipt",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Receipt" } },
+      },
+    },
+    "/api/payments/overdue/sync": {
+      post: {
+        tags: ["Payments"],
+        summary: "Mark late installments as overdue",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Overdue repayments" } },
       },
     },
     "/api/refurbishments": {

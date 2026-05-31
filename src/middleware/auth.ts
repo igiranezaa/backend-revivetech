@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { prisma } from "../config/prisma.js";
-import { UserRole } from "@prisma/client";
+import { UserRole, UserStatus } from "@prisma/client";
 import type { User } from "@prisma/client";
 
 // Extend Request type to include user
@@ -39,11 +39,28 @@ export const requireAuth = async (
       return;
     }
 
+    if (user.status !== UserStatus.ACTIVE) {
+      res.status(403).json({ message: "Account is not active. Please contact support." });
+      return;
+    }
+
     req.user = user;
     next();
   } catch (error) {
     res.status(401).json({ message: "Token is not valid or has expired" });
   }
+};
+
+export const optionalAuth = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  if (!req.headers.authorization) {
+    next();
+    return;
+  }
+  await requireAuth(req, res, next);
 };
 
 export const requireRoles = (allowedRoles: UserRole[]) => {
