@@ -71,7 +71,7 @@ const calculateTrustScore = (condition: DeviceCondition, batteryHealth: number, 
 export const intakeDevice = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   let uploadedImagePublicId: string | null = null;
   try {
-    const { brand, model, originalSerialNumber, condition, batteryHealth, basePrice, price, warehouse, stock } = req.body;
+    const { brand, model, originalSerialNumber, condition, batteryHealth, basePrice, price, warehouse, stock, publishToMarketplace } = req.body;
 
     if (!brand || !model || !condition || basePrice === undefined || price === undefined) {
       res.status(400).json({ message: "Required fields: brand, model, condition, basePrice, price" });
@@ -108,6 +108,7 @@ export const intakeDevice = async (req: AuthenticatedRequest, res: Response): Pr
     const trustScore = calculateTrustScore(condition as DeviceCondition, parsedBatteryHealth, 0);
     const { imageUrl, publicId } = await uploadDeviceImage(req.file);
     uploadedImagePublicId = publicId;
+    const shouldPublish = req.user?.role === UserRole.ADMIN && publishToMarketplace === "true";
 
     const device = await prisma.device.create({
       data: {
@@ -115,7 +116,7 @@ export const intakeDevice = async (req: AuthenticatedRequest, res: Response): Pr
         model,
         originalSerialNumber,
         condition: condition as DeviceCondition,
-        status: DeviceStatus.INTAKE,
+        status: shouldPublish ? DeviceStatus.READY : DeviceStatus.INTAKE,
         batteryHealth: parsedBatteryHealth,
         basePrice: parsedBasePrice,
         price: parsedPrice,
@@ -125,7 +126,18 @@ export const intakeDevice = async (req: AuthenticatedRequest, res: Response): Pr
         trustScore,
         eWasteSavedKg,
         carbonSavedKg,
+        ...(shouldPublish ? {
+          listings: {
+            create: {
+              title: `${brand} ${model}`,
+              description: `${condition.toLowerCase()} condition device, available from ReviveTech inventory.`,
+              price: parsedPrice,
+              status: ListingStatus.ACTIVE,
+            },
+          },
+        } : {}),
       },
+      include: { listings: true },
     });
 
     await writeAuditLog({
@@ -134,7 +146,10 @@ export const intakeDevice = async (req: AuthenticatedRequest, res: Response): Pr
       userId: req.user?.id || null,
     });
 
-    res.status(201).json({ message: "Device registered in intake successfully", device });
+    res.status(201).json({
+      message: shouldPublish ? "Device added and published to the marketplace successfully" : "Device registered in intake successfully",
+      device,
+    });
   } catch (error: any) {
     if (uploadedImagePublicId) {
       await cloudinary.uploader.destroy(uploadedImagePublicId).catch(() => undefined);
