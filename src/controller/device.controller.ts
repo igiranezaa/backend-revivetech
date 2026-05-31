@@ -115,7 +115,8 @@ export const intakeDevice = async (req: AuthenticatedRequest, res: Response): Pr
     const trustScore = calculateTrustScore(condition as DeviceCondition, parsedBatteryHealth, 0);
     const { imageUrl, publicId } = await uploadDeviceImage(req.file);
     uploadedImagePublicId = publicId;
-    const shouldPublish = req.user?.role === UserRole.ADMIN && parseBooleanFlag(publishToMarketplace);
+    const shouldPublish = req.user?.role === UserRole.ADMIN
+      && (publishToMarketplace === undefined || parseBooleanFlag(publishToMarketplace));
 
     const device = await prisma.device.create({
       data: {
@@ -149,7 +150,7 @@ export const intakeDevice = async (req: AuthenticatedRequest, res: Response): Pr
 
     await writeAuditLog({
       action: "DEVICE_INTAKE",
-      details: `Technician ${req.user?.email} registered device ${device.brand} ${device.model} (ID: ${device.id}).`,
+      details: `User ${req.user?.email} registered device ${device.brand} ${device.model} (ID: ${device.id}). Marketplace publication: ${shouldPublish}.`,
       userId: req.user?.id || null,
     });
 
