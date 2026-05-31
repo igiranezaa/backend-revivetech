@@ -68,6 +68,13 @@ const calculateTrustScore = (condition: DeviceCondition, batteryHealth: number, 
   return Math.max(30.0, Math.min(100.0, score));
 };
 
+const parseBooleanFlag = (value: unknown): boolean => {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return false;
+
+  return ["true", "1", "yes", "on"].includes(value.trim().toLowerCase());
+};
+
 export const intakeDevice = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   let uploadedImagePublicId: string | null = null;
   try {
@@ -108,7 +115,7 @@ export const intakeDevice = async (req: AuthenticatedRequest, res: Response): Pr
     const trustScore = calculateTrustScore(condition as DeviceCondition, parsedBatteryHealth, 0);
     const { imageUrl, publicId } = await uploadDeviceImage(req.file);
     uploadedImagePublicId = publicId;
-    const shouldPublish = req.user?.role === UserRole.ADMIN && publishToMarketplace === "true";
+    const shouldPublish = req.user?.role === UserRole.ADMIN && parseBooleanFlag(publishToMarketplace);
 
     const device = await prisma.device.create({
       data: {
@@ -148,6 +155,7 @@ export const intakeDevice = async (req: AuthenticatedRequest, res: Response): Pr
 
     res.status(201).json({
       message: shouldPublish ? "Device added and published to the marketplace successfully" : "Device registered in intake successfully",
+      publishedToMarketplace: shouldPublish,
       device,
     });
   } catch (error: any) {
