@@ -251,12 +251,30 @@ export const adminDeleteUser = async (req: AuthenticatedRequest, res: Response):
       return;
     }
 
-    await prisma.user.update({
-      where: { id },
-      data: {
-        status: UserStatus.DELETED,
-        isVerified: false,
-      },
+    await prisma.$transaction(async transaction => {
+      await transaction.device.updateMany({
+        where: { ownerId: id },
+        data: { ownerId: null },
+      });
+      await transaction.financingApplication.updateMany({
+        where: { approvedById: id },
+        data: { approvedById: null },
+      });
+      await transaction.payment.deleteMany({
+        where: {
+          OR: [
+            { userId: id },
+            { order: { customerId: id } },
+          ],
+        },
+      });
+      await transaction.order.deleteMany({ where: { customerId: id } });
+      await transaction.financingApplication.deleteMany({ where: { customerId: id } });
+      await transaction.tradeInRequest.deleteMany({ where: { userId: id } });
+      await transaction.supportChatSession.deleteMany({ where: { customerId: id } });
+      await transaction.repairLog.deleteMany({ where: { technicianId: id } });
+      await transaction.aiInteraction.deleteMany({ where: { userId: id } });
+      await transaction.user.delete({ where: { id } });
     });
 
     await writeAuditLog({
@@ -265,7 +283,7 @@ export const adminDeleteUser = async (req: AuthenticatedRequest, res: Response):
       userId: req.user?.id || null,
     });
 
-    res.status(200).json({ message: "User deleted successfully" });
+    res.status(200).json({ message: "User permanently deleted from the database" });
   } catch (error: any) {
     res.status(500).json({ message: "Failed to delete user", error: error.message });
   }

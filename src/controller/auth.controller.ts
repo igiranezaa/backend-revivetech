@@ -20,14 +20,14 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     }
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
+    if (existingUser && existingUser.status !== UserStatus.DELETED) {
       res.status(400).json({ message: "User with this email already exists" });
       return;
     }
 
     if (phone) {
       const existingPhone = await prisma.user.findUnique({ where: { phone } });
-      if (existingPhone) {
+      if (existingPhone && existingPhone.id !== existingUser?.id) {
         res.status(400).json({ message: "User with this phone number already exists" });
         return;
       }
@@ -37,23 +37,33 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     const otp = generateOtp();
     const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
 
-    const user = await prisma.user.create({
-      data: {
-        firstName,
-        lastName,
-        email,
-        phone,
-        password: hashedPassword,
-        role: UserRole.CUSTOMER,
-        isVerified: false,
-        otpCode: otp,
-        otpExpiresAt: otpExpires,
-      },
-    });
+    const accountData = {
+      firstName,
+      lastName,
+      phone: phone || null,
+      password: hashedPassword,
+      role: UserRole.CUSTOMER,
+      status: UserStatus.ACTIVE,
+      isVerified: false,
+      otpCode: otp,
+      otpExpiresAt: otpExpires,
+    };
+
+    const user = existingUser
+      ? await prisma.user.update({
+        where: { id: existingUser.id },
+        data: accountData,
+      })
+      : await prisma.user.create({
+        data: {
+          ...accountData,
+          email,
+        },
+      });
 
     await writeAuditLog({
-      action: "USER_REGISTER",
-      details: `User ${user.email} registered with role ${user.role}.`,
+      action: existingUser ? "USER_REREGISTER" : "USER_REGISTER",
+      details: `User ${user.email} ${existingUser ? "reactivated" : "registered"} with role ${user.role}.`,
       userId: user.id,
     });
 
