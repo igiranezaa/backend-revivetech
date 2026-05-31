@@ -17,12 +17,13 @@ import {
 } from "../controller/device.controller.js";
 import { requireAuth, requireRoles } from "../middleware/auth.js";
 import { UserRole } from "@prisma/client";
+import { imageUpload } from "../config/multer.js";
 
 const router = Router();
 
 // Technician & Admin Device management routes
 router.get("/", requireAuth, requireRoles([UserRole.TECHNICIAN, UserRole.ADMIN]), listDevices);
-router.post("/intake", requireAuth, requireRoles([UserRole.TECHNICIAN, UserRole.ADMIN]), intakeDevice);
+router.post("/intake", requireAuth, requireRoles([UserRole.TECHNICIAN, UserRole.ADMIN]), imageUpload.single("image"), intakeDevice);
 router.post("/repair", requireAuth, requireRoles([UserRole.TECHNICIAN]), updateRepairStatus);
 router.post("/qc", requireAuth, requireRoles([UserRole.TECHNICIAN]), submitQcCheck);
 router.post("/certify", requireAuth, requireRoles([UserRole.TECHNICIAN]), certifyDevice);

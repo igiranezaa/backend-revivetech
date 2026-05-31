@@ -178,6 +178,9 @@ model Device {
   carbonSavedKg        Float           @default(50.0)
   price                Float
   basePrice            Float
+  warehouse            String          @default("Kigali Central")
+  stock                Int             @default(1)
+  imageUrl              String?
   ownerId              String?
   owner                User?           @relation("DeviceOwner", fields: [ownerId], references: [id])
 

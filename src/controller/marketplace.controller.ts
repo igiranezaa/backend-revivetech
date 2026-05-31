@@ -88,6 +88,7 @@ export const getListings = async (req: AuthenticatedRequest, res: Response): Pro
             trustScore: true,
             eWasteSavedKg: true,
             carbonSavedKg: true,
+            imageUrl: true,
           },
         },
       },

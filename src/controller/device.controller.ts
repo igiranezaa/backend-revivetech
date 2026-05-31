@@ -5,6 +5,22 @@ import { DeviceCondition, DeviceStatus, ListingStatus, TradeInStatus, UserRole }
 import { AiService } from "../services/ai.service.js";
 import { writeAuditLog } from "../utils/audit-log.js";
 import { parseOptionalString } from "../utils/request.js";
+import { cloudinary } from "../config/cloudinary.js";
+
+const uploadDeviceImage = (file: Express.Multer.File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder: "revivetech/devices", resource_type: "image" },
+      (error, result) => {
+        if (error || !result?.secure_url) {
+          reject(error || new Error("Cloudinary did not return an image URL"));
+          return;
+        }
+        resolve(result.secure_url);
+      },
+    );
+    stream.end(file.buffer);
+  });
 
 // Helper to estimate carbon and e-waste offsets
 const calculateSustainabilityMetrics = (brand: string, model: string) => {
@@ -54,15 +70,26 @@ const calculateTrustScore = (condition: DeviceCondition, batteryHealth: number, 
 
 export const intakeDevice = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { brand, model, originalSerialNumber, condition, batteryHealth, basePrice, price } = req.body;
+    const { brand, model, originalSerialNumber, condition, batteryHealth, basePrice, price, warehouse, stock } = req.body;
 
     if (!brand || !model || !condition || basePrice === undefined || price === undefined) {
       res.status(400).json({ message: "Required fields: brand, model, condition, basePrice, price" });
       return;
     }
 
+    if (!req.file) {
+      res.status(400).json({ message: "A device picture is required" });
+      return;
+    }
+
     const { eWasteSavedKg, carbonSavedKg } = calculateSustainabilityMetrics(brand, model);
     const trustScore = calculateTrustScore(condition, batteryHealth || 100, 0);
+    const initialStock = stock !== undefined ? Number(stock) : 1;
+    if (!Number.isInteger(initialStock) || initialStock < 0) {
+      res.status(400).json({ message: "Stock must be a non-negative whole number" });
+      return;
+    }
+    const imageUrl = await uploadDeviceImage(req.file);
 
     const device = await prisma.device.create({
       data: {
@@ -74,6 +101,9 @@ export const intakeDevice = async (req: AuthenticatedRequest, res: Response): Pr
         batteryHealth: batteryHealth !== undefined ? batteryHealth : 100,
         basePrice,
         price,
+        warehouse: warehouse || "Kigali Central",
+        stock: initialStock,
+        imageUrl,
         trustScore,
         eWasteSavedKg,
         carbonSavedKg,

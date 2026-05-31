@@ -49,6 +49,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       otpCode: otp,
       otpExpiresAt: otpExpires,
     };
+    await sendOtpEmail({ email, otp, purpose: "verify" });
 
     const user = existingUser
       ? await prisma.user.update({
@@ -67,8 +68,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       details: `User ${user.email} ${existingUser ? "reactivated" : "registered"} with role ${user.role}.`,
       userId: user.id,
     });
-    await sendOtpEmail({ email: user.email, otp, purpose: "verify" });
-
     res.status(201).json({
       message: "Registration successful. Please verify using the OTP code sent.",
       userId: user.id,
@@ -98,6 +97,7 @@ export const resendVerificationOtp = async (req: Request, res: Response): Promis
     }
 
     const otp = generateOtp();
+    await sendOtpEmail({ email: user.email, otp, purpose: "verify" });
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -105,7 +105,6 @@ export const resendVerificationOtp = async (req: Request, res: Response): Promis
         otpExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
       },
     });
-    await sendOtpEmail({ email: user.email, otp, purpose: "verify" });
     res.status(200).json({ message: "A new verification code has been sent." });
   } catch (error: any) {
     res.status(500).json({ message: "Could not resend verification code", error: error.message });
@@ -204,10 +203,12 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     const expires = process.env["JWT_EXPIRES_IN"] || "7d";
     const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn: expires as any });
 
-    await writeAuditLog({
+    void writeAuditLog({
       action: "USER_LOGIN",
       details: `User ${user.email} logged in.`,
       userId: user.id,
+    }).catch((error) => {
+      console.error("[AuditLog] Failed to record login", error);
     });
 
     res.status(200).json({
@@ -243,6 +244,7 @@ export const requestPasswordReset = async (req: Request, res: Response): Promise
 
     const otp = generateOtp();
     const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+    await sendOtpEmail({ email: user.email, otp, purpose: "reset" });
 
     await prisma.user.update({
       where: { id: user.id },
@@ -251,8 +253,6 @@ export const requestPasswordReset = async (req: Request, res: Response): Promise
         otpExpiresAt: otpExpires,
       },
     });
-    await sendOtpEmail({ email: user.email, otp, purpose: "reset" });
-
     res.status(200).json({
       message: "Password reset OTP sent.",
     });
