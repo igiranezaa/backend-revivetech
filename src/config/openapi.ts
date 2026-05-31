@@ -81,6 +81,17 @@ export const openApiSpec = {
         responses: { "200": { description: "Account verified" } },
       },
     },
+    "/api/auth/resend-verification-otp": {
+      post: {
+        tags: ["Auth"],
+        summary: "Resend account verification OTP",
+        requestBody: {
+          required: true,
+          content: { "application/json": { example: { email: "aline@example.com" } } },
+        },
+        responses: { "200": { description: "Verification OTP sent" } },
+      },
+    },
     "/api/auth/login": {
       post: {
         tags: ["Auth"],
@@ -100,7 +111,7 @@ export const openApiSpec = {
           required: true,
           content: { "application/json": { example: { email: "aline@example.com" } } },
         },
-        responses: { "200": { description: "Password reset OTP generated" } },
+        responses: { "200": { description: "Password reset OTP sent" } },
       },
     },
     "/api/auth/reset-password": {

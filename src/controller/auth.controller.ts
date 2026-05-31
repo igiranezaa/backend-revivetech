@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { prisma } from "../config/prisma.js";
 import { UserRole, UserStatus } from "@prisma/client";
 import { writeAuditLog } from "../utils/audit-log.js";
+import { sendOtpEmail } from "../config/email.js";
 
 // Generate 6 digit numeric OTP
 const generateOtp = (): string => {
@@ -66,15 +67,48 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       details: `User ${user.email} ${existingUser ? "reactivated" : "registered"} with role ${user.role}.`,
       userId: user.id,
     });
+    await sendOtpEmail({ email: user.email, otp, purpose: "verify" });
 
     res.status(201).json({
       message: "Registration successful. Please verify using the OTP code sent.",
       userId: user.id,
       email: user.email,
-      otpCode: otp, // Return OTP directly for testing purposes
     });
   } catch (error: any) {
     res.status(500).json({ message: "Registration failed", error: error.message });
+  }
+};
+
+export const resendVerificationOtp = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ message: "Required field: email" });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user || user.status === UserStatus.DELETED) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+    if (user.isVerified) {
+      res.status(400).json({ message: "User is already verified" });
+      return;
+    }
+
+    const otp = generateOtp();
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        otpCode: otp,
+        otpExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      },
+    });
+    await sendOtpEmail({ email: user.email, otp, purpose: "verify" });
+    res.status(200).json({ message: "A new verification code has been sent." });
+  } catch (error: any) {
+    res.status(500).json({ message: "Could not resend verification code", error: error.message });
   }
 };
 
@@ -217,10 +251,10 @@ export const requestPasswordReset = async (req: Request, res: Response): Promise
         otpExpiresAt: otpExpires,
       },
     });
+    await sendOtpEmail({ email: user.email, otp, purpose: "reset" });
 
     res.status(200).json({
-      message: "Password reset OTP generated.",
-      otpCode: otp, // Return OTP directly for testing purposes
+      message: "Password reset OTP sent.",
     });
   } catch (error: any) {
     res.status(500).json({ message: "Request failed", error: error.message });
