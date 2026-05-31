@@ -67,6 +67,7 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response): P
 export const adminListUsers = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const users = await prisma.user.findMany({
+      where: { status: { not: UserStatus.DELETED } },
       select: {
         id: true,
         firstName: true,
