@@ -7,7 +7,7 @@ import { writeAuditLog } from "../utils/audit-log.js";
 import { parseOptionalString } from "../utils/request.js";
 import { cloudinary } from "../config/cloudinary.js";
 
-const uploadDeviceImage = (file: Express.Multer.File): Promise<string> =>
+const uploadDeviceImage = (file: Express.Multer.File): Promise<{ imageUrl: string; publicId: string }> =>
   new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       { folder: "revivetech/devices", resource_type: "image" },
@@ -16,7 +16,7 @@ const uploadDeviceImage = (file: Express.Multer.File): Promise<string> =>
           reject(error || new Error("Cloudinary did not return an image URL"));
           return;
         }
-        resolve(result.secure_url);
+        resolve({ imageUrl: result.secure_url, publicId: result.public_id });
       },
     );
     stream.end(file.buffer);
@@ -69,6 +69,7 @@ const calculateTrustScore = (condition: DeviceCondition, batteryHealth: number, 
 };
 
 export const intakeDevice = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  let uploadedImagePublicId: string | null = null;
   try {
     const { brand, model, originalSerialNumber, condition, batteryHealth, basePrice, price, warehouse, stock } = req.body;
 
@@ -82,14 +83,31 @@ export const intakeDevice = async (req: AuthenticatedRequest, res: Response): Pr
       return;
     }
 
-    const { eWasteSavedKg, carbonSavedKg } = calculateSustainabilityMetrics(brand, model);
-    const trustScore = calculateTrustScore(condition, batteryHealth || 100, 0);
+    if (!Object.values(DeviceCondition).includes(condition as DeviceCondition)) {
+      res.status(400).json({ message: "Invalid condition value" });
+      return;
+    }
+
+    const parsedBatteryHealth = batteryHealth !== undefined ? Number(batteryHealth) : 100;
+    const parsedBasePrice = Number(basePrice);
+    const parsedPrice = Number(price);
     const initialStock = stock !== undefined ? Number(stock) : 1;
+    if (!Number.isInteger(parsedBatteryHealth) || parsedBatteryHealth < 1 || parsedBatteryHealth > 100) {
+      res.status(400).json({ message: "Battery health must be a whole number from 1 to 100" });
+      return;
+    }
+    if (!Number.isFinite(parsedBasePrice) || parsedBasePrice < 0 || !Number.isFinite(parsedPrice) || parsedPrice < 0) {
+      res.status(400).json({ message: "Acquisition cost and selling price must be non-negative numbers" });
+      return;
+    }
     if (!Number.isInteger(initialStock) || initialStock < 0) {
       res.status(400).json({ message: "Stock must be a non-negative whole number" });
       return;
     }
-    const imageUrl = await uploadDeviceImage(req.file);
+    const { eWasteSavedKg, carbonSavedKg } = calculateSustainabilityMetrics(brand, model);
+    const trustScore = calculateTrustScore(condition as DeviceCondition, parsedBatteryHealth, 0);
+    const { imageUrl, publicId } = await uploadDeviceImage(req.file);
+    uploadedImagePublicId = publicId;
 
     const device = await prisma.device.create({
       data: {
@@ -98,9 +116,9 @@ export const intakeDevice = async (req: AuthenticatedRequest, res: Response): Pr
         originalSerialNumber,
         condition: condition as DeviceCondition,
         status: DeviceStatus.INTAKE,
-        batteryHealth: batteryHealth !== undefined ? batteryHealth : 100,
-        basePrice,
-        price,
+        batteryHealth: parsedBatteryHealth,
+        basePrice: parsedBasePrice,
+        price: parsedPrice,
         warehouse: warehouse || "Kigali Central",
         stock: initialStock,
         imageUrl,
@@ -118,6 +136,9 @@ export const intakeDevice = async (req: AuthenticatedRequest, res: Response): Pr
 
     res.status(201).json({ message: "Device registered in intake successfully", device });
   } catch (error: any) {
+    if (uploadedImagePublicId) {
+      await cloudinary.uploader.destroy(uploadedImagePublicId).catch(() => undefined);
+    }
     res.status(500).json({ message: "Intake registration failed", error: error.message });
   }
 };
