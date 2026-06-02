@@ -4,10 +4,13 @@
   "description": "",
   "main": "src/server.ts",
   "scripts": {
-    "dev": "DOTENV_CONFIG_PATH=src/.env tsx watch src/server.ts",
-    "build": "DOTENV_CONFIG_PATH=src/.env prisma generate && tsc",
-    "start": "DOTENV_CONFIG_PATH=src/.env prisma db push && DOTENV_CONFIG_PATH=src/.env prisma db seed && DOTENV_CONFIG_PATH=src/.env tsx src/server.ts",
-    "seed": "DOTENV_CONFIG_PATH=src/.env prisma db seed"
+    "dev": "tsx watch src/server.ts",
+    "build": "prisma generate && tsc",
+    "start": "prisma db push && prisma db seed && tsx src/server.ts",
+    "seed": "tsx prisma/seed.ts",
+    "test:email": "tsx scripts/test-email.ts",
+    "db:push": "prisma db push",
+    "db:generate": "prisma generate"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

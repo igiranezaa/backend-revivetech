@@ -16,6 +16,7 @@ import {
   reviewTradeIn,
 } from "../controller/device.controller.js";
 import { requireAuth, requireRoles } from "../middleware/auth.js";
+import { tradeInImageUpload } from "../middleware/upload.js";
 import { UserRole } from "@prisma/client";
 
 const router = Router();
@@ -30,8 +31,13 @@ router.post("/certify", requireAuth, requireRoles([UserRole.TECHNICIAN]), certif
 // Public / Authenticated route to view device passport
 router.get("/passport/:deviceId", getDigitalPassport);
 
-// Customer Trade-In routes
-router.post("/trade-in", requireAuth, submitTradeIn);
+// Customer sell / trade-in routes (multipart for device photos)
+router.post(
+  "/trade-in",
+  requireAuth,
+  tradeInImageUpload.array("images", 5),
+  submitTradeIn
+);
 
 // Management Trade-In routes
 router.get("/trade-in", requireAuth, listTradeIns);

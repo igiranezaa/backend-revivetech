@@ -311,8 +311,19 @@ model TradeInRequest {
   user           User            @relation("UserTradeIn", fields: [userId], references: [id])
   brand          String
   model          String
+  category       String?
   condition      DeviceCondition
+  batteryHealth  Int?
+  askingPrice    Float?
   estimatedValue Float
+  imageUrls      String          @default("[]")
+  defects        String?
+  storage        String?
+  ram            String?
+  color          String?
+  location       String?
+  aiReasoning    String?
+  officerNotes   String?
   status         TradeInStatus   @default(PENDING)
 
   createdAt DateTime @default(now())

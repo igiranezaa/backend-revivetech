@@ -109,7 +109,7 @@ export const getListingDetails = async (req: AuthenticatedRequest, res: Response
       return;
     }
 
-    const listing = await prisma.marketplaceListing.findUnique({
+    let listing = await prisma.marketplaceListing.findUnique({
       where: { id },
       include: {
         device: {
@@ -119,6 +119,24 @@ export const getListingDetails = async (req: AuthenticatedRequest, res: Response
         },
       },
     });
+
+    // Allow /marketplace/:deviceId when the param is a device id (e.g. wishlist links)
+    if (!listing) {
+      listing = await prisma.marketplaceListing.findFirst({
+        where: {
+          deviceId: id,
+          status: ListingStatus.ACTIVE,
+          device: { status: DeviceStatus.READY },
+        },
+        include: {
+          device: {
+            include: {
+              passport: true,
+            },
+          },
+        },
+      });
+    }
 
     if (!listing) {
       res.status(404).json({ message: "Listing not found" });

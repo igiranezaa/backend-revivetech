@@ -3,8 +3,21 @@ import type { AuthenticatedRequest } from "../middleware/auth.js";
 import { prisma } from "../config/prisma.js";
 import { DeviceCondition, DeviceStatus, ListingStatus, TradeInStatus, UserRole } from "@prisma/client";
 import { AiService } from "../services/ai.service.js";
+import { uploadTradeInImages, isCloudinaryConfigured } from "../services/upload.service.js";
 import { writeAuditLog } from "../utils/audit-log.js";
 import { parseOptionalString } from "../utils/request.js";
+
+const mapSellCondition = (condition: string): DeviceCondition | null => {
+  const normalized = condition.trim().toUpperCase();
+  if (normalized === "EXCELLENT" || normalized === "GRADE A") return DeviceCondition.EXCELLENT;
+  if (normalized === "GOOD" || normalized === "GRADE B") return DeviceCondition.GOOD;
+  if (normalized === "FAIR" || normalized === "GRADE C") return DeviceCondition.FAIR;
+  if (normalized === "POOR" || normalized === "FOR PARTS" || normalized === "GRADE D") return DeviceCondition.POOR;
+  if (Object.values(DeviceCondition).includes(normalized as DeviceCondition)) {
+    return normalized as DeviceCondition;
+  }
+  return null;
+};
 
 // Helper to estimate carbon and e-waste offsets
 const calculateSustainabilityMetrics = (brand: string, model: string) => {
@@ -491,36 +504,88 @@ export const getDigitalPassport = async (req: AuthenticatedRequest, res: Respons
 
 export const submitTradeIn = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { brand, model, condition, batteryHealth } = req.body;
+    const {
+      brand,
+      model,
+      condition,
+      category,
+      batteryHealth,
+      askingPrice,
+      defects,
+      storage,
+      ram,
+      color,
+      location,
+    } = req.body;
 
     if (!brand || !model || !condition) {
       res.status(400).json({ message: "Required fields: brand, model, condition" });
       return;
     }
 
-    // Call AI service for estimation
+    const deviceCondition = mapSellCondition(String(condition));
+    if (!deviceCondition) {
+      res.status(400).json({ message: "Invalid condition value" });
+      return;
+    }
+
+    const parsedBattery = batteryHealth !== undefined && batteryHealth !== ""
+      ? parseInt(String(batteryHealth), 10)
+      : 85;
+    const battery = Number.isFinite(parsedBattery) ? Math.min(100, Math.max(0, parsedBattery)) : 85;
+
+    const files = (req as AuthenticatedRequest & { files?: Express.Multer.File[] }).files ?? [];
+    let imageUrls: string[] = [];
+    if (files.length > 0) {
+      if (!isCloudinaryConfigured()) {
+        res.status(503).json({ message: "Image upload is not configured on the server" });
+        return;
+      }
+      imageUrls = await uploadTradeInImages(files);
+    }
+
     const evaluation = await AiService.evaluateDevice({
-      brand,
-      model,
-      condition: condition as DeviceCondition,
-      batteryHealth: batteryHealth || 85,
+      brand: String(brand),
+      model: String(model),
+      condition: deviceCondition,
+      batteryHealth: battery,
     });
 
     const tradeIn = await prisma.tradeInRequest.create({
       data: {
         userId: req.user!.id,
-        brand,
-        model,
-        condition: condition as DeviceCondition,
+        brand: String(brand),
+        model: String(model),
+        category: category ? String(category) : null,
+        condition: deviceCondition,
+        batteryHealth: battery,
+        askingPrice: askingPrice !== undefined && askingPrice !== "" ? parseFloat(String(askingPrice)) : null,
         estimatedValue: evaluation.tradeInRecommendation,
+        imageUrls: JSON.stringify(imageUrls),
+        defects: defects ? String(defects) : null,
+        storage: storage ? String(storage) : null,
+        ram: ram ? String(ram) : null,
+        color: color ? String(color) : null,
+        location: location ? String(location) : null,
+        aiReasoning: evaluation.reasoning,
         status: TradeInStatus.PENDING,
+      },
+      include: {
+        user: { select: { firstName: true, lastName: true, email: true, phone: true } },
       },
     });
 
+    await writeAuditLog({
+      action: "TRADE_IN_SUBMIT",
+      details: `Customer ${req.user?.email} submitted sell request for ${brand} ${model} (ID: ${tradeIn.id}).`,
+      userId: req.user?.id || null,
+    });
+
     res.status(201).json({
-      message: "Trade-in request submitted. Instantly evaluated by AI.",
+      message: "Sell request submitted. Our finance team will review it shortly.",
       tradeIn,
       aiEvaluation: evaluation,
+      aiEnabled: AiService.isLlmConfigured(),
     });
   } catch (error: any) {
     res.status(500).json({ message: "Trade-in submission failed", error: error.message });
@@ -581,15 +646,16 @@ export const getTradeIn = async (req: AuthenticatedRequest, res: Response): Prom
 export const reviewTradeIn = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const tradeInId = parseOptionalString(req.params["id"]) || req.body.tradeInId;
-    const { status } = req.body;
+    const { status, officerNotes } = req.body;
 
     if (!tradeInId || !status) {
       res.status(400).json({ message: "Required fields: tradeInId, status" });
       return;
     }
 
-    if (!Object.values(TradeInStatus).includes(status)) {
-      res.status(400).json({ message: "Invalid status value" });
+    const allowedReviewStatuses: TradeInStatus[] = [TradeInStatus.APPROVED, TradeInStatus.REJECTED];
+    if (!allowedReviewStatuses.includes(status as TradeInStatus)) {
+      res.status(400).json({ message: "Status must be APPROVED or REJECTED" });
       return;
     }
 
@@ -599,14 +665,26 @@ export const reviewTradeIn = async (req: AuthenticatedRequest, res: Response): P
       return;
     }
 
-    if (tradeIn.status === TradeInStatus.COMPLETED) {
-      res.status(400).json({ message: "Completed trade-in requests cannot be reviewed again" });
+    if (tradeIn.status !== TradeInStatus.PENDING) {
+      res.status(400).json({ message: "Only pending sell requests can be reviewed" });
       return;
     }
 
     const updatedTradeIn = await prisma.tradeInRequest.update({
       where: { id: tradeInId },
-      data: { status: status as TradeInStatus },
+      data: {
+        status: status as TradeInStatus,
+        ...(officerNotes !== undefined ? { officerNotes: officerNotes ? String(officerNotes) : null } : {}),
+      },
+      include: {
+        user: { select: { firstName: true, lastName: true, email: true, phone: true } },
+      },
+    });
+
+    await writeAuditLog({
+      action: "TRADE_IN_REVIEW",
+      details: `Officer ${req.user?.email} marked sell request ${tradeInId} as ${status}.`,
+      userId: req.user?.id || null,
     });
 
     // If completed, we can automatically create a device intake

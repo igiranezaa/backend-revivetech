@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { prisma } from "../config/prisma.js";
 import { UserRole, UserStatus } from "@prisma/client";
 import { writeAuditLog } from "../utils/audit-log.js";
+import { deliverOtpEmail } from "../utils/send-otp.js";
 
 // Generate 6 digit numeric OTP
 const generateOtp = (): string => {
@@ -67,11 +68,15 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       userId: user.id,
     });
 
+    const delivery = await deliverOtpEmail(user.email, otp, "verification");
+
     res.status(201).json({
-      message: "Registration successful. Please verify using the OTP code sent.",
+      message: delivery.emailed
+        ? "Registration successful. Please check your email for the verification code."
+        : "Registration successful. Please verify using the OTP code (email not configured).",
       userId: user.id,
       email: user.email,
-      otpCode: otp, // Return OTP directly for testing purposes
+      ...(delivery.devOtp ? { otpCode: delivery.devOtp } : {}),
     });
   } catch (error: any) {
     res.status(500).json({ message: "Registration failed", error: error.message });
@@ -218,9 +223,13 @@ export const requestPasswordReset = async (req: Request, res: Response): Promise
       },
     });
 
+    const delivery = await deliverOtpEmail(user.email, otp, "password-reset");
+
     res.status(200).json({
-      message: "Password reset OTP generated.",
-      otpCode: otp, // Return OTP directly for testing purposes
+      message: delivery.emailed
+        ? "Password reset code sent to your email."
+        : "Password reset code generated (email not configured).",
+      ...(delivery.devOtp ? { otpCode: delivery.devOtp } : {}),
     });
   } catch (error: any) {
     res.status(500).json({ message: "Request failed", error: error.message });

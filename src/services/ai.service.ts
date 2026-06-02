@@ -46,23 +46,51 @@ interface RepairResponse {
   recommendedParts: string[];
 }
 
+type LlmProvider = "groq" | "openai";
+
 export class AiService {
-  private static getOpenAiApiKey(): string | null {
-    return process.env["OPENAI_API_KEY"] || null;
+  private static getLlmConfig(): { apiKey: string; model: string; provider: LlmProvider; baseURL?: string } | null {
+    const groqKey = process.env["GROQ_API_KEY"];
+    if (groqKey) {
+      return {
+        apiKey: groqKey,
+        model: process.env["GROQ_MODEL"] || "llama-3.3-70b-versatile",
+        provider: "groq",
+        baseURL: "https://api.groq.com/openai/v1",
+      };
+    }
+
+    const openaiKey = process.env["OPENAI_API_KEY"];
+    if (openaiKey) {
+      return {
+        apiKey: openaiKey,
+        model: process.env["OPENAI_MODEL"] || "gpt-4o-mini",
+        provider: "openai",
+      };
+    }
+
+    return null;
   }
 
-  private static async callOpenAi<T>(systemPrompt: string, userPrompt: string, fallback: T): Promise<T> {
-    const apiKey = this.getOpenAiApiKey();
-    if (!apiKey) {
+  static isLlmConfigured(): boolean {
+    return this.getLlmConfig() !== null;
+  }
+
+  private static async callLlm<T>(systemPrompt: string, userPrompt: string, fallback: T): Promise<T> {
+    const config = this.getLlmConfig();
+    if (!config) {
       return fallback;
     }
 
     try {
       const model = new ChatOpenAI({
-        apiKey,
-        model: process.env["OPENAI_MODEL"] || "gpt-4o-mini",
+        apiKey: config.apiKey,
+        model: config.model,
         temperature: 0,
         maxRetries: 2,
+        ...(config.baseURL
+          ? { configuration: { baseURL: config.baseURL } }
+          : {}),
         modelKwargs: {
           response_format: { type: "json_object" },
         },
@@ -77,7 +105,35 @@ export class AiService {
       }
       return fallback;
     } catch (error) {
-      console.error("Error communicating with OpenAI:", error);
+      console.error(`Error communicating with ${config.provider}:`, error);
+      return fallback;
+    }
+  }
+
+  private static async callLlmText(systemPrompt: string, userPrompt: string, fallback: string): Promise<string> {
+    const config = this.getLlmConfig();
+    if (!config) {
+      return fallback;
+    }
+
+    try {
+      const model = new ChatOpenAI({
+        apiKey: config.apiKey,
+        model: config.model,
+        temperature: 0.3,
+        maxRetries: 2,
+        ...(config.baseURL
+          ? { configuration: { baseURL: config.baseURL } }
+          : {}),
+      });
+      const response = await model.invoke([
+        ["system", systemPrompt],
+        ["human", userPrompt],
+      ]);
+      const content = typeof response.content === "string" ? response.content.trim() : "";
+      return content || fallback;
+    } catch (error) {
+      console.error(`Error communicating with ${config.provider}:`, error);
       return fallback;
     }
   }
@@ -132,7 +188,7 @@ export class AiService {
       reasoning: `Market data for ${req.brand} ${req.model} shows strong stability. The condition '${req.condition}' justifies a resale price of $${resaleValue}. We recommend offering a trade-in value of $${tradeInValue} to retain margins for servicing and quality assurance certification.`
     };
 
-    return this.callOpenAi<ValuationResponse>(systemPrompt, userPrompt, fallbackResponse);
+    return this.callLlm<ValuationResponse>(systemPrompt, userPrompt, fallbackResponse);
   }
 
   /**
@@ -191,7 +247,7 @@ export class AiService {
       paymentAbilityScore: score
     };
 
-    return this.callOpenAi<FinancingResponse>(systemPrompt, userPrompt, fallbackResponse);
+    return this.callLlm<FinancingResponse>(systemPrompt, userPrompt, fallbackResponse);
   }
 
   /**
@@ -252,7 +308,7 @@ export class AiService {
       recommendedParts: parts
     };
 
-    return this.callOpenAi<RepairResponse>(systemPrompt, userPrompt, fallbackResponse);
+    return this.callLlm<RepairResponse>(systemPrompt, userPrompt, fallbackResponse);
   }
 
   /**
@@ -315,11 +371,7 @@ export class AiService {
     const systemPrompt = `You are a conversational Customer Support AI for a refurbished device resale and installment financing web application. Answer user queries concisely and supportively.`;
     const userPrompt = `User message: ${message}\nSuggested baseline answer: ${answer}`;
 
-    const finalAnswer = await this.callOpenAi<{ answer: string }>(
-      systemPrompt,
-      userPrompt,
-      { answer }
-    ).then(res => res.answer);
+    const finalAnswer = await this.callLlmText(systemPrompt, userPrompt, answer);
 
     // 3. Log AI response
     await prisma.supportChatMessage.create({

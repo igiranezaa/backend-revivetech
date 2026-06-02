@@ -1,7 +1,11 @@
+import { config } from "dotenv";
+import { resolve } from "node:path";
 import express from "express";
 import type { Request, Response } from "express";
 import cors from "cors";
-import "dotenv/config";
+
+config({ path: resolve(process.cwd(), ".env") });
+config({ path: resolve(process.cwd(), "src/.env") });
 import routes from "./routes/index.js";
 import { prisma } from "./config/prisma.js";
 import { getOpenApiSpec, swaggerHtml } from "./config/openapi.js";

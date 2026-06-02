@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  adminCreateUser,
   adminDeleteUser,
   adminGetUser,
   adminListUsers,
@@ -17,6 +18,7 @@ router.get("/profile", requireAuth, getProfile);
 router.put("/profile", requireAuth, updateProfile);
 
 // Admin-only actions
+router.post("/admin/users", requireAuth, requireRoles([UserRole.ADMIN]), adminCreateUser);
 router.get("/admin/users", requireAuth, requireRoles([UserRole.ADMIN]), adminListUsers);
 router.get("/admin/users/:id", requireAuth, requireRoles([UserRole.ADMIN]), adminGetUser);
 router.put("/admin/users/:id", requireAuth, requireRoles([UserRole.ADMIN]), adminUpdateUser);
