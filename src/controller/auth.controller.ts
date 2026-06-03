@@ -11,6 +11,11 @@ const generateOtp = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
+const getEmailFailureResponse = (otp: string) => ({
+  emailDeliveryFailed: true,
+  ...(process.env["NODE_ENV"] !== "production" ? { otpCode: otp } : {}),
+});
+
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     const { firstName, lastName, email, phone, password } = req.body;
@@ -49,7 +54,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       otpCode: otp,
       otpExpiresAt: otpExpires,
     };
-    await sendOtpEmail({ email, otp, purpose: "verify" });
 
     const user = existingUser
       ? await prisma.user.update({
@@ -68,6 +72,20 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       details: `User ${user.email} ${existingUser ? "reactivated" : "registered"} with role ${user.role}.`,
       userId: user.id,
     });
+
+    try {
+      await sendOtpEmail({ email: user.email, otp, purpose: "verify" });
+    } catch (emailError) {
+      console.error("[Email] Failed to send registration OTP", emailError);
+      res.status(201).json({
+        message: "Registration successful, but we could not send the verification code. Please request a new code.",
+        userId: user.id,
+        email: user.email,
+        ...getEmailFailureResponse(otp),
+      });
+      return;
+    }
+
     res.status(201).json({
       message: "Registration successful. Please verify using the OTP code sent.",
       userId: user.id,
@@ -97,7 +115,6 @@ export const resendVerificationOtp = async (req: Request, res: Response): Promis
     }
 
     const otp = generateOtp();
-    await sendOtpEmail({ email: user.email, otp, purpose: "verify" });
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -105,6 +122,18 @@ export const resendVerificationOtp = async (req: Request, res: Response): Promis
         otpExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
       },
     });
+
+    try {
+      await sendOtpEmail({ email: user.email, otp, purpose: "verify" });
+    } catch (emailError) {
+      console.error("[Email] Failed to resend verification OTP", emailError);
+      res.status(503).json({
+        message: "Could not send verification code right now. Please try again later.",
+        ...getEmailFailureResponse(otp),
+      });
+      return;
+    }
+
     res.status(200).json({ message: "A new verification code has been sent." });
   } catch (error: any) {
     res.status(500).json({ message: "Could not resend verification code", error: error.message });
