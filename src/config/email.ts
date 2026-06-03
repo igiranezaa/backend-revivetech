@@ -1,10 +1,23 @@
 import "dotenv/config";
 import nodemailer from "nodemailer";
 
-const host = process.env["SMTP_HOST"] || process.env["EMAIL_HOST"];
+const readEnv = (name: string): string | undefined => {
+  const value = process.env[name]?.trim().replace(/^['"]|['"]$/g, "");
+  return value || undefined;
+};
+
+const normalizePassword = (password: string | undefined, smtpHost: string | undefined): string | undefined => {
+  if (!password) {
+    return undefined;
+  }
+
+  return smtpHost === "smtp.gmail.com" ? password.replace(/\s/g, "") : password;
+};
+
+const host = readEnv("SMTP_HOST") || readEnv("EMAIL_HOST");
 const port = Number(process.env["SMTP_PORT"] || process.env["EMAIL_PORT"] || 587);
-const user = process.env["SMTP_USER"] || process.env["EMAIL_USER"];
-const pass = process.env["SMTP_PASS"] || process.env["EMAIL_PASS"];
+const user = readEnv("SMTP_USER") || readEnv("EMAIL_USER");
+const pass = normalizePassword(readEnv("SMTP_PASS") || readEnv("EMAIL_PASS"), host);
 
 export const emailTransporter = nodemailer.createTransport({
   host,
