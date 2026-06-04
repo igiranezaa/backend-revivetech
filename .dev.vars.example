@@ -1,0 +1,14 @@
+DATABASE_URL=postgresql://user:password@host:5432/database
+JWT_SECRET=replace-with-a-long-random-secret
+
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USER=your-gmail-address@gmail.com
+EMAIL_PASS=your-gmail-app-password-without-spaces
+EMAIL_FROM=Your App <your-gmail-address@gmail.com>
+
+CLOUDINARY_CLOUD_NAME=replace-me
+CLOUDINARY_API_KEY=replace-me
+CLOUDINARY_API_SECRET=replace-me
+
+OPENAI_API_KEY=sk-replace-me
