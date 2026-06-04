@@ -1,0 +1,33 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "revivetech-api",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-06-04",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "enable_nodejs_http_modules",
+    "enable_nodejs_http_server_modules"
+  ],
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "NODE_ENV": "production",
+    "DATABASE_SSL": "true",
+    "JWT_EXPIRES_IN": "7d",
+    "RATE_LIMIT_WINDOW_MS": "900000",
+    "RATE_LIMIT_MAX_REQUESTS": "100",
+    "OPENAI_MODEL": "gpt-4o-mini"
+  },
+
+  // Optional: if you create a Cloudflare Hyperdrive connection for Postgres,
+  // add the binding here and update DATABASE_URL to use the Hyperdrive
+  // connection string in src/config/prisma.ts.
+  // "hyperdrive": [
+  //   {
+  //     "binding": "HYPERDRIVE",
+  //     "id": "<your-hyperdrive-id>"
+  //   }
+  // ]
+}
